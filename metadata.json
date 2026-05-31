@@ -1,0 +1,6 @@
+{
+  "name": "Live Motorsport Timing Board",
+  "description": "A high-performance live-reordering motorsport leaderboard simulation supporting SignalR telemetry streams, overtake animations, lap timers, and real-time custom race control.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
