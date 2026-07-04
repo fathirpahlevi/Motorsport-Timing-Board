@@ -36,7 +36,6 @@ import {
   WifiOff,
   Bell
 } from 'lucide-react';
-import { HubConnectionBuilder, HubConnection } from "@microsoft/signalr";
 import { RiderResult, SignalRPacket } from './types';
 import { INITIAL_RIDERS, recalculateGaps, parseLapTimeToMs, formatLapTime } from './data';
 
@@ -110,10 +109,10 @@ export default function App() {
   // Collapsible Setup drawer state
   const [isSetupOpen, setIsSetupOpen] = useState<boolean>(false);
 
-  // Connection / SignalR states
+  // Connection / WebSocket states
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const connectionRef = useRef<HubConnection | null>(null);
+  const connectionRef = useRef<WebSocket | null>(null);
 
   // Simulation Controls (Moved entirely into the collapsible Setup Drawer)
   const [autoSimulate, setAutoSimulate] = useState<boolean>(false);
@@ -336,11 +335,11 @@ export default function App() {
     }
   };
 
-  // Connect to real-time Speedhive Hub using HubConnectionBuilder
-  const connectSignalR = async (sessionId: string) => {
+  // Connect to our backend WebSocket proxy
+  const connectSignalR = (sessionId: string) => {
     if (connectionRef.current) {
       try {
-        await connectionRef.current.stop();
+        connectionRef.current.close();
       } catch (e) {
         // ignore
       }
@@ -348,64 +347,98 @@ export default function App() {
 
     setConnectionStatus('connecting');
     setConnectionError(null);
-    addWebSocketLog('system', `📡 Connecting SignalR endpoint: https://notifications.speedhive.com/api`);
+
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const socketUrl = `${wsProtocol}//${window.location.host}`;
+    addWebSocketLog('system', `📡 Connecting to backend WebSocket proxy: ${socketUrl}`);
 
     try {
-      const connection = new HubConnectionBuilder()
-        .withUrl("https://notifications.speedhive.com/api")
-        .withAutomaticReconnect()
-        .build();
+      const socket = new WebSocket(socketUrl);
 
-      connection.on("resultsForSessionReceived", (data) => {
-        addWebSocketLog('in', `📥 resultsForSessionReceived websocket frame parsed`);
-        if (data && Array.isArray(data.results)) {
-          injectSignalRPacket(data);
-        }
-      });
+      socket.onopen = () => {
+        addWebSocketLog('system', `🟢 Connected to backend proxy. Subscribing to session: ${sessionId}`);
+        socket.send(JSON.stringify({
+          type: "subscribe",
+          sessionId: sessionId
+        }));
+      };
 
-      connection.on("sessionAddedOrUpdated", (data) => {
-        addWebSocketLog('in', `🔔 Feed event: sessionAddedOrUpdated`);
-        if (data) {
-          if (data.eNam) setRaceTitle(data.eNam);
-          if (data.rnNam) setSessionName(data.rnNam);
-          if (data.gNam) setGroupName(data.gNam);
-          if (data.btLpTim) setSessionBestTime(data.btLpTim);
-        }
-      });
-
-      connection.on("announcementsUpdated", (data) => {
-        addWebSocketLog('in', `📢 Announcement message received`);
-        if (data && data.tx) {
-          setLatestAnnouncement(data.tx);
-          setTimeout(() => {
-            setLatestAnnouncement((current) => current === data.tx ? '' : current);
-          }, 15000); // clear after 15 seconds
-        }
-      });
-
-      connection.on("statsUpdated", (data) => {
-        addWebSocketLog('in', `📊 Stats packet received`);
-        if (data && data.bestLapTime) {
-          setSessionBestTime(data.bestLapTime);
-          if (data.bestLapDriverName) {
-            setSessionBestRider(data.bestLapDriverName);
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          
+          if (message.type === "status") {
+            if (message.status === "connected") {
+              setConnectionStatus('connected');
+              addWebSocketLog('system', `🟢 Speedhive session subscription verified. Telemetry active.`);
+            } else if (message.status === "error") {
+              setConnectionStatus('error');
+              setConnectionError(message.message || 'Subscription failed');
+              addWebSocketLog('system', `❌ Subscription Error: ${message.message}`);
+            }
+          } else if (message.type === "resultsForSessionReceived") {
+            addWebSocketLog('in', `📥 resultsForSessionReceived websocket frame parsed`);
+            const data = message.data;
+            if (data && Array.isArray(data.results)) {
+              injectSignalRPacket(data);
+            }
+          } else if (message.type === "sessionAddedOrUpdated") {
+            addWebSocketLog('in', `🔔 Feed event: sessionAddedOrUpdated`);
+            const data = message.data;
+            if (data) {
+              if (data.eNam) setRaceTitle(data.eNam);
+              if (data.rnNam) setSessionName(data.rnNam);
+              if (data.gNam) setGroupName(data.gNam);
+              if (data.btLpTim) setSessionBestTime(data.btLpTim);
+            }
+          } else if (message.type === "announcementsUpdated") {
+            addWebSocketLog('in', `📢 Announcement message received`);
+            const data = message.data;
+            if (data && data.tx) {
+              setLatestAnnouncement(data.tx);
+              setTimeout(() => {
+                setLatestAnnouncement((current) => current === data.tx ? '' : current);
+              }, 15000); // clear after 15 seconds
+            }
+          } else if (message.type === "statsUpdated") {
+            addWebSocketLog('in', `📊 Stats packet received`);
+            const data = message.data;
+            if (data && data.bestLapTime) {
+              setSessionBestTime(data.bestLapTime);
+              if (data.bestLapDriverName) {
+                setSessionBestRider(data.bestLapDriverName);
+              }
+            }
           }
+        } catch (err: any) {
+          console.error("Failed to parse backend websocket message:", err);
         }
-      });
+      };
 
-      await connection.start();
-      setConnectionStatus('connected');
-      addWebSocketLog('system', `🟢 Connected to Speedhive Live timing network.`);
+      socket.onclose = (event) => {
+        if (!event.wasClean) {
+          setConnectionStatus('error');
+          setConnectionError(`Connection closed unexpectedly (code ${event.code})`);
+          addWebSocketLog('system', `❌ Backend WebSocket proxy connection closed unexpectedly`);
+        } else {
+          setConnectionStatus('disconnected');
+          addWebSocketLog('system', `⚪ Backend WebSocket proxy connection closed normally`);
+        }
+      };
 
-      await connection.invoke("JoinGroup", `session-${sessionId}`);
-      addWebSocketLog('system', `🚀 SignalR group joined: session-${sessionId}. Telemetry cycles fully responsive.`);
-      
-      connectionRef.current = connection;
+      socket.onerror = (err) => {
+        console.error("Frontend WebSocket Error:", err);
+        setConnectionStatus('error');
+        setConnectionError('WebSocket connection error');
+        addWebSocketLog('system', `❌ WebSocket connection error encountered`);
+      };
+
+      connectionRef.current = socket;
     } catch (err: any) {
-      console.error("SignalR Connection Failure:", err);
+      console.error("Frontend WebSocket initialization failure:", err);
       setConnectionStatus('error');
-      setConnectionError(err.message || 'SignalR connection timed out');
-      addWebSocketLog('system', `❌ WebSocket link crashed: ${err.message}`);
+      setConnectionError(err.message || 'WebSocket initialization failed');
+      addWebSocketLog('system', `❌ WebSocket initialization failure: ${err.message}`);
     }
   };
 
@@ -435,7 +468,7 @@ export default function App() {
     }
 
     // 2. Spawn WebSockets
-    await connectSignalR(sessionId);
+    connectSignalR(sessionId);
   };
 
   // Run automatically on component startup to restore past session if saved
@@ -446,7 +479,7 @@ export default function App() {
     }
     return () => {
       if (connectionRef.current) {
-        connectionRef.current.stop();
+        connectionRef.current.close();
       }
     };
   }, []);
