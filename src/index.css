@@ -75,4 +75,12 @@
   .flash-red-bg {
     animation: timing-flash-lost 1.2s ease-out forwards;
   }
+
+  .finished{
+    background-image: url("img/finish-stripe.png");
+    top: 0; left: 0;
+    background-size: cover; /* or contain */
+    background-position: center;
+    opacity:1;
+  }
 }

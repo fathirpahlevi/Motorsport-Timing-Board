@@ -9,6 +9,19 @@ interface SessionSubscription {
   connection: HubConnection;
   subscribers: Set<WSClient>;
 }
+let savedID = {eventId: "", sessionId: ""};
+let raceState = {
+  eventId: "",
+  sessionId: "",
+  results: null as any,
+  sessionInfo: null as any,
+  announcement: "",
+  stats: null as any,
+  controlAction: "",
+  isTimerRunning: false,
+  raceSeconds: 0
+};
+const allClients = new Set<WSClient>();
 
 async function startServer() {
   const app = express();
@@ -27,25 +40,64 @@ async function startServer() {
 
   // Proxy route for Speedhive initial data to avoid CORS issues
   app.get("/api/speedhive-proxy", async (req, res) => {
-    const { eventId, sessionId } = req.query;
-    if (!eventId || !sessionId) {
-      return res.status(400).json({ error: "Missing eventId or sessionId parameters." });
+    let { eventId, sessionId } = req.query;
+    console.log("[Proxy] savedId", savedID);
+    
+    if (!eventId && !sessionId) {
+      if (raceState.results) {
+        console.log("[Proxy] Returning cached results to client.");
+        return res.json(raceState.results);
+      }
+      eventId = savedID.eventId;
+      sessionId = savedID.sessionId;
     }
 
-    const apiUrl = `https://lt-api.speedhive.com/api/events/${eventId}/sessions/${sessionId}/data`;
-    console.log(`[Proxy] Fetching initial data from: ${apiUrl}`);
+    if(sessionId && sessionId !== savedID.sessionId) {
+      savedID.sessionId = sessionId as string;
+      raceState.sessionId = sessionId as string;
+      broadcastToAll({ type: "newConnection", sessionId: sessionId });
+      console.log("[Proxy] Updated savedId to new session", savedID);
+    }
+    if(eventId && eventId !== savedID.eventId) {
+      savedID.eventId = eventId as string;
+      raceState.eventId = eventId as string;
+    }
 
+    if (!savedID.eventId || !savedID.sessionId) {
+      return res.status(400).json({ error: `Missing eventId or sessionId parameters.` });
+    }
+
+    const apiUrl = `https://lt-api.speedhive.com/api/events/${savedID.eventId}/sessions/${savedID.sessionId}/data`;
+    console.log(`[Proxy] Fetching initial data from: ${apiUrl}`);
     try {
       const response = await fetch(apiUrl, {
         headers: {
-          "Accept": "application/json",
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          "accept": "application/json",
+          "origin": "https://speedhive.mylaps.com",
+          "referer": "https://speedhive.mylaps.com/"
         }
       });
+      
       if (!response.ok) {
         throw new Error(`Speedhive API returned status ${response.status}`);
       }
       const data = await response.json();
+      console.log(`[Proxy] Initial Data Fetched`);
+      
+      // Update our server-side cache
+      raceState.results = data;
+      if (data.eNam || data.rnNam || data.gNam || data.btLpTim || data.ls || data.lsTg || typeof data.f === "number") {
+        raceState.sessionInfo = {
+          eNam: data.eNam,
+          rnNam: data.rnNam,
+          gNam: data.gNam,
+          btLpTim: data.btLpTim,
+          ls: data.ls,
+          lsTg: data.lsTg,
+          f: data.f
+        };
+      }
+      
       res.json(data);
     } catch (error: any) {
       console.error("[Proxy Error]", error);
@@ -60,6 +112,16 @@ async function startServer() {
     }
   }
 
+  // Helper to broadcast to all clients globally
+  function broadcastToAll(payload: any) {
+    const rawData = JSON.stringify(payload);
+    for (const ws of allClients) {
+      if (ws.readyState === WSClient.OPEN) {
+        ws.send(rawData);
+      }
+    }
+  }
+
   // Helper to broadcast to all clients watching a session
   function broadcastToSession(sessionId: string, payload: any) {
     const sessionSub = activeSignalRConnections.get(sessionId);
@@ -68,6 +130,7 @@ async function startServer() {
     const rawData = JSON.stringify(payload);
     for (const ws of sessionSub.subscribers) {
       if (ws.readyState === WSClient.OPEN) {
+        console.log('Broadcasting to:', sessionId);
         ws.send(rawData);
       }
     }
@@ -75,6 +138,7 @@ async function startServer() {
 
   // Helper to handle client subscriber exit
   function removeClientFromAllSessions(ws: WSClient) {
+    allClients.delete(ws);
     for (const [sessionId, sessionSub] of activeSignalRConnections.entries()) {
       if (sessionSub.subscribers.has(ws)) {
         sessionSub.subscribers.delete(ws);
@@ -91,74 +155,157 @@ async function startServer() {
     }
   }
 
+  // Run a low-frequency stopwatch drift corrector on the server
+  setInterval(() => {
+    if (raceState.isTimerRunning) {
+      raceState.raceSeconds += 5;
+      broadcastToAll({
+        type: "stopwatchState",
+        isTimerRunning: raceState.isTimerRunning,
+        raceSeconds: raceState.raceSeconds
+      });
+    }
+  }, 5000);
+
   // WebSocket connection listener
   wss.on("connection", (ws) => {
     console.log("[WS Server] Frontend connected.");
+    allClients.add(ws);
+
+    // Send the current full state immediately to the newly connected client
+    sendToClient(ws, {
+      type: "syncState",
+      eventId: raceState.eventId || savedID.eventId,
+      sessionId: raceState.sessionId || savedID.sessionId,
+      results: raceState.results,
+      sessionInfo: raceState.sessionInfo,
+      announcement: raceState.announcement,
+      stats: raceState.stats,
+      controlAction: raceState.controlAction,
+      isTimerRunning: raceState.isTimerRunning,
+      raceSeconds: raceState.raceSeconds
+    });
+
+    // If there is already an active session, notify them to switch/subscribe
+    if (savedID.sessionId) {
+      sendToClient(ws, {
+        type: "newConnection",
+        sessionId: savedID.sessionId
+      });
+    }
 
     ws.on("message", async (rawMessage) => {
       try {
         const message = JSON.parse(rawMessage.toString());
+        const sessionId = message.sessionId;
         console.log(`[WS Server] Received client command:`, message);
 
-        if (message.type === "subscribe" && message.sessionId) {
-          const sessionId = message.sessionId;
+        if (message.type === "newConnection" && message.newSessionId) {
+          console.log(`[WS Server] New Session ID. Broadcasting to all clients: ${message.newSessionId}`);
+          savedID.sessionId = message.newSessionId;
+          raceState.sessionId = message.newSessionId;
+          broadcastToAll({ type: "newConnection", sessionId: message.newSessionId });
+        }
+        else if (message.type === "subscribe") {
+          sendToClient(ws, { type: "status", status: "waiting" });
+          
+          if (message.sessionId) {
+            // Check if SignalR connection already exists
+            let sessionSub = activeSignalRConnections.get(sessionId);
+            if (!sessionSub) {
+              console.log(`[SignalR Proxy] Initiating backend SignalR connection for session: ${sessionId}`);
+              sendToClient(ws, { type: "status", status: "connecting", sessionId });
 
-          // Check if SignalR connection already exists
-          let sessionSub = activeSignalRConnections.get(sessionId);
-          if (!sessionSub) {
-            console.log(`[SignalR Proxy] Initiating backend SignalR connection for session: ${sessionId}`);
+              const connection = new HubConnectionBuilder()
+                .withUrl("https://notifications.speedhive.com/api", {
+                  webSocket: WSClient as any,
+                } as any)
+                .withAutomaticReconnect()
+                .build();
 
-            const connection = new HubConnectionBuilder()
-              .withUrl("https://notifications.speedhive.com/api", {
-                // Pass the standard WebSocket constructor from 'ws' package to run SignalR in Node
-                webSocket: WSClient as any,
-              } as any)
-              .withAutomaticReconnect()
-              .build();
+              sessionSub = {
+                connection,
+                subscribers: new Set<WSClient>(),
+              };
+              activeSignalRConnections.set(sessionId, sessionSub);
 
-            sessionSub = {
-              connection,
-              subscribers: new Set<WSClient>(),
-            };
-            activeSignalRConnections.set(sessionId, sessionSub);
+              // Connect event handlers and update server cache
+              connection.on("resultsForSessionReceived", (data) => {
+                raceState.results = data;
+                broadcastToSession(sessionId, { type: "resultsForSessionReceived", data });
+              });
 
-            // Connect event handlers
-            connection.on("resultsForSessionReceived", (data) => {
-              broadcastToSession(sessionId, { type: "resultsForSessionReceived", data });
-            });
+              connection.on("sessionAddedOrUpdated", (data) => {
+                raceState.sessionInfo = { ...raceState.sessionInfo, ...data };
+                broadcastToSession(sessionId, { type: "sessionAddedOrUpdated", data });
+              });
 
-            connection.on("sessionAddedOrUpdated", (data) => {
-              broadcastToSession(sessionId, { type: "sessionAddedOrUpdated", data });
-            });
+              connection.on("announcementsUpdated", (data) => {
+                if (data && data.tx) {
+                  raceState.announcement = data.tx;
+                }
+                broadcastToSession(sessionId, { type: "announcementsUpdated", data });
+              });
 
-            connection.on("announcementsUpdated", (data) => {
-              broadcastToSession(sessionId, { type: "announcementsUpdated", data });
-            });
+              connection.on("statsUpdated", (data) => {
+                raceState.stats = data;
+                broadcastToSession(sessionId, { type: "statsUpdated", data });
+              });
 
-            connection.on("statsUpdated", (data) => {
-              broadcastToSession(sessionId, { type: "statsUpdated", data });
-            });
+              try {
+                await connection.start();
+                console.log(`[SignalR Proxy] Connected to Speedhive for session: ${sessionId}`);
+                await connection.invoke("JoinGroup", `session-${sessionId}`);
+                console.log(`[SignalR Proxy] Joined Group session-${sessionId}`);
 
-            try {
-              await connection.start();
-              console.log(`[SignalR Proxy] Connected to Speedhive for session: ${sessionId}`);
-              await connection.invoke("JoinGroup", `session-${sessionId}`);
-              console.log(`[SignalR Proxy] Joined Group session-${sessionId}`);
-
+                sendToClient(ws, { type: "status", status: "connected", sessionId });
+              } catch (err: any) {
+                console.error(`[SignalR Proxy Error] Start failed for session ${sessionId}:`, err);
+                sendToClient(ws, { type: "status", status: "error", message: err.message, sessionId });
+                activeSignalRConnections.delete(sessionId);
+                return;
+              }
+            } else {
+              console.log(`[SignalR Proxy] Client joined existing session subscription: ${sessionId}`);
               sendToClient(ws, { type: "status", status: "connected", sessionId });
-            } catch (err: any) {
-              console.error(`[SignalR Proxy Error] Start failed for session ${sessionId}:`, err);
-              sendToClient(ws, { type: "status", status: "error", message: err.message, sessionId });
-              activeSignalRConnections.delete(sessionId);
-              return;
             }
-          } else {
-            console.log(`[SignalR Proxy] Client joined existing session subscription: ${sessionId}`);
-            sendToClient(ws, { type: "status", status: "connected", sessionId });
-          }
 
-          // Register subscriber ws
-          sessionSub.subscribers.add(ws);
+            // Register subscriber ws
+            sessionSub.subscribers.add(ws);
+
+            // Send cached timing data immediately to this newly subscribed client
+            if (raceState.results) {
+              sendToClient(ws, { type: "resultsForSessionReceived", data: raceState.results });
+            }
+            if (raceState.sessionInfo) {
+              sendToClient(ws, { type: "sessionAddedOrUpdated", data: raceState.sessionInfo });
+            }
+            if (raceState.announcement) {
+              sendToClient(ws, { type: "announcementsUpdated", data: { tx: raceState.announcement } });
+            }
+            if (raceState.stats) {
+              sendToClient(ws, { type: "statsUpdated", data: raceState.stats });
+            }
+          }
+        }
+        else if (message.type === 'control') {
+          console.log(`[WS Server] Control action broadcast:`, message.action);
+          raceState.controlAction = message.action;
+          broadcastToAll({ type: 'control', action: message.action });
+        }
+        else if (message.type === 'stopwatch') {
+          console.log(`[WS Server] Stopwatch sync: running=${message.action === 'start'}, seconds=${message.raceSeconds}`);
+          raceState.isTimerRunning = message.action === 'start';
+          if (message.action === 'reset') {
+            raceState.raceSeconds = 0;
+          } else if (typeof message.raceSeconds === 'number') {
+            raceState.raceSeconds = message.raceSeconds;
+          }
+          broadcastToAll({
+            type: "stopwatchState",
+            isTimerRunning: raceState.isTimerRunning,
+            raceSeconds: raceState.raceSeconds
+          });
         }
       } catch (err) {
         console.error("[WS Server] Error handling incoming client message:", err);
