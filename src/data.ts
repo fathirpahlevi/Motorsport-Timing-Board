@@ -44,21 +44,23 @@ export function recalculateGaps(riders: RiderResult[]): RiderResult[] {
     const posInt = index + 1;
     const posStr = posInt.toString();
     
-    let gpStr = "";
-    let dfStr = "";
+    let gpStr = rider.gp ?? rider.gpCl ?? "";
+    let dfStr = rider.df ?? rider.dfCl ?? "";
     
-    if (index === 0) {
-      gpStr = "LEADER";
-      dfStr = "-";
-    } else {
-      const currentMs = parseLapTimeToMs(rider.tTm || "0:00.000");
-      const precedingMs = parseLapTimeToMs(sorted[index - 1].tTm || "0:00.000");
-      
-      const gapToLeader = (currentMs - leaderMs) / 1000;
-      const diffToPreceding = (currentMs - precedingMs) / 1000;
-      
-      gpStr = gapToLeader > 0 ? `+${gapToLeader.toFixed(3)}` : `+0.000`;
-      dfStr = diffToPreceding > 0 ? `+${diffToPreceding.toFixed(3)}` : `+0.000`;
+    if (gpStr === "" || gpStr === "+0.000") {
+      if (index === 0) {
+        gpStr = "LEADER";
+        dfStr = "-";
+      } else {
+        const currentMs = parseLapTimeToMs(rider.tTm || "0:00.000");
+        const precedingMs = parseLapTimeToMs(sorted[index - 1].tTm || "0:00.000");
+        
+        const gapToLeader = (currentMs - leaderMs) / 1000;
+        const diffToPreceding = (currentMs - precedingMs) / 1000;
+        
+        gpStr = gapToLeader > 0 ? `+${gapToLeader.toFixed(3)}` : `+0.000`;
+        dfStr = diffToPreceding > 0 ? `+${diffToPreceding.toFixed(3)}` : `+0.000`;
+      }
     }
     
     return {
@@ -68,8 +70,8 @@ export function recalculateGaps(riders: RiderResult[]): RiderResult[] {
       pCl: posStr,
       gp: gpStr,
       df: dfStr,
-      gpCl: gpStr,
-      dfCl: dfStr
+      gpCl: rider.gpCl ?? gpStr,
+      dfCl: rider.dfCl ?? dfStr
     };
   });
 }

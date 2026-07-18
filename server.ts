@@ -17,7 +17,7 @@ let raceState = {
   sessionInfo: null as any,
   announcement: "",
   stats: null as any,
-  controlAction: "",
+  controlAction: {},
   isTimerRunning: false,
   raceSeconds: 0
 };
@@ -290,7 +290,11 @@ async function startServer() {
         }
         else if (message.type === 'control') {
           console.log(`[WS Server] Control action broadcast:`, message.action);
-          raceState.controlAction = message.action;
+          if (message.action && message.action.reset) {
+            raceState.controlAction = {};
+          } else {
+            raceState.controlAction = { ...raceState.controlAction, ...message.action };
+          }
           broadcastToAll({ type: 'control', action: message.action });
         }
         else if (message.type === 'stopwatch') {

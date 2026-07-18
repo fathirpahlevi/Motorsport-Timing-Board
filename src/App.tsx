@@ -35,12 +35,20 @@ import {
   Wifi,
   WifiOff,
   Bell,
-  Diamond
+  Diamond,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 import { RiderResult, SignalRPacket } from './types';
 import { INITIAL_RIDERS, recalculateGaps, parseLapTimeToMs, formatLapTime } from './data';
-import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import {DisplayController} from './components/control';
+
+interface ControlState {
+  laps?: boolean;
+  time?: boolean;
+  [key: string]: boolean | undefined; // Allows for any other dynamic boolean/keys you might send later
+}
 
 // Helper to parse Speedhive URLs or session IDs
 function parseSpeedhiveUrl(urlStr: string) {
@@ -113,6 +121,9 @@ export default function App() {
   const [isClosedLoop, setIsClosedLoop] = useState<boolean>(() => {
     return localStorage.getItem('is_closed_loop') !== 'false';
   });
+
+  
+  const [control, setControl] = useState<ControlState>({});
 
   // Display states mapped from Speedhive events
   const [raceTitle, setRaceTitle] = useState<string>('-');
@@ -526,6 +537,7 @@ export default function App() {
             }
             if (message.controlAction) {
               setControlAction(message.controlAction);
+              setControl(message.controlAction);
             }
             if (typeof message.isTimerRunning === "boolean") {
               setIsTimerRunning(message.isTimerRunning);
@@ -603,8 +615,17 @@ export default function App() {
                 setSessionBestRider(data.bestLapDriverName);
               }
             }
-          } else if(message.type === "control"){
+          } else if(message.type === "control" && message.action){
             console.log("Control action received:", message.action);
+            setControl((prevControl) => {
+              if (message.action.reset) {
+                return {};
+              }
+              return {
+                ...prevControl,
+                ...message.action
+              };
+            });
             setControlAction(message.action);
           }
 
@@ -901,7 +922,7 @@ export default function App() {
   };
 
   return (
-    <HashRouter>
+    <BrowserRouter>
       <Routes>
         <Route 
             path="/" 
@@ -1137,10 +1158,10 @@ export default function App() {
                                 {/* Delta arrows */}
                                 <div className="hidden sm:block">
                                   {rider.changeDirection === 'up' && (
-                                    <TrendingUp className="w-4 h-4 text-emerald-500" />
+                                    <ChevronUp className="w-4 h-4 text-emerald-500" />
                                   )}
                                   {rider.changeDirection === 'down' && (
-                                    <TrendingDown className="w-4 h-4 text-red-500" />
+                                    <ChevronDown className="w-4 h-4 text-red-500" />
                                   )}
                                   {(!rider.changeDirection && rider.if === true) && (
                                     <span className="text-zinc-650 text-3xl font-bold">🏁</span>
@@ -1703,7 +1724,7 @@ export default function App() {
         <Route 
             path="/sidePosition" 
             element={
-          <div className={`${controlAction === 'SHOW_LAPS' ? 'w-[600px]' : 'w-[400px]'} transition-transform duration-300 ease-in-out min-h-screen text-zinc-100 font-sans flex flex-col selection:bg-red-600 selection:text-white relative overflow-x-hidden`} id="main-container">
+          <div className={`${control.laps ? 'w-[600px]' : 'w-[400px]'} transition-transform duration-300 ease-in-out min-h-screen text-zinc-100 font-sans flex flex-col selection:bg-red-600 selection:text-white relative overflow-x-hidden`} id="main-container">
             {/* DETAILED TRACK CONSOLE - TAKE 100% ENTIRE PAGE DISPLAY */}
             <main className="flex-1 max-w-7xl w-full mx-auto p-6 flex flex-col gap-6 relative z-10 animate-fade-in" id="main-content">
               
@@ -1745,12 +1766,19 @@ export default function App() {
                                 ? 'bg-red-950/60 border-l-red-500 transition-all duration-300'
                                 : ''
                             : '';
+                            const posState = isRecentlyChanged
+                            ? rider.changeDirection === 'up'
+                              ? 'bg-emerald-950/60 border-l-emerald-500 transition-all duration-300'
+                              : rider.changeDirection === 'down'
+                                ? 'bg-red-950/60 border-l-red-500 transition-all duration-300'
+                                : ''
+                            : '';
 
                           return (
                             <motion.div
                               layoutId={`rider-row-${rider.id}`}
                               key={rider.id}
-                              className={`${showUI.diff ? 'mt-8 ' : ''}my-1 ${controlAction === 'SHOW_LAPS' ? '' : ''} w-min-screen gap-2.5 flex items-center flex-row border-transparent pointer border-l-4 ${flashClass}`}
+                              className={`${showUI.diff ? 'mt-8 ' : ''}my-1 ${control.laps ? '' : ''} w-min-screen gap-2.5 flex items-center flex-row border-transparent pointer border-l-4 ${flashClass}`}
                               id={`rider-row-${rider.id}`}
                               onClick={() => {
                                 setSelectedRiderId(rider.id === selectedRiderId ? null : rider.id);
@@ -1758,41 +1786,20 @@ export default function App() {
                                 playBeep('tick');
                               }}
                             >
-                              <div className="flex items-center w-[500px] h-full grid grid-cols-11 border-zinc-700 bg-zinc-950/90">
+                              <div className={`flex items-center ${control.time ? 'grid-cols-11' : 'grid-cols-8'} w-[700px] h-full grid border-zinc-700 bg-zinc-950/90 transition-all duration-300`}>
                                 {/* POSITION */}
-                                <div className="col-span-1 flex items-center justify-center">
-                                  {/* Delta arrows */}
-                                  <div className="hidden">
-                                    {rider.changeDirection === 'up' && (
-                                      <TrendingUp className="w-4 h-4 text-emerald-500" />
-                                    )}
-                                    {rider.changeDirection === 'down' && (
-                                      <TrendingDown className="w-4 h-4 text-red-500" />
-                                    )}
-                                    {(!rider.changeDirection && rider.if === true) && (
-                                      <span className="text-zinc-650 text-3xl font-bold">🏁</span>
-                                    )}
-                                    {(!rider.changeDirection && rider.if === false) && (
-                                      <span className="text-zinc-650 text-3xl font-bold">-</span>
-                                    )}
-                                    {(rider.changeDirection === 'steady' && rider.if === false) && (
-                                      <span className="text-zinc-650 text-3xl font-bold">-</span>
-                                    )}
-                                    {(rider.changeDirection === 'steady' && rider.if === true) && (
-                                      <span className="text-zinc-650 text-3xl font-bold">🏁</span>
-                                    )}
-                                  </div>
-                                  <span className={`${posTextStyle}`} id={`rider-pos-${rider.id}`}>
-                                    {`${(index + 1).toString()}`}
+                                <div className="col-span-1 flex items-center justify-center gap-1">
+                                  <span className="text-zinc-100 text-xl font-bold font-mono" id={`rider-pos-${rider.id}`}>
+                                    {rider.if === true ? "🏁" : `${index + 1}`}
                                   </span>
+                                  {rider.changeDirection === 'up' && (
+                                    <ChevronUp className="w-4 h-4 text-emerald-500 shrink-0" />
+                                  )}
+                                  {rider.changeDirection === 'down' && (
+                                    <ChevronDown className="w-4 h-4 text-red-500 shrink-0" />
+                                  )}
                                 </div>
                                 
-                                {/* VEHICLE NO */}
-                                <div className="col-span-2 bg-linear-to-r from-black/40 to-black/100 text-center">
-                                  <span className="text-3xl italic tracking-tighter text-white select-none font-sans">
-                                    {rider.no}
-                                  </span>
-                                </div>        
                                 {/* RIDER NAME / TEAM */}
                                 <div className="col-span-5 pl-4 flex items-center h-full bg-linear-to-r from-blue-950/70 to-black/0">
                                   <div className="flex flex-col">
@@ -1816,11 +1823,19 @@ export default function App() {
                                 </div>
 
                                 
+                                {/* VEHICLE NO */}
+                                <div className="col-span-2 my-1 rounded-lg bg-linear-to-r from-blue-700/40 to-blue-800/100 text-center">
+                                  <span className="text-xl italic tracking-tighter text-white select-none font-sans">
+                                    {rider.no}
+                                  </span>
+                                </div>        
+
+                                
 
                                 {/* BEST & LAST TIMINGS */}
-                                <div className="col-span-3 text-right flex flex-col justify-center">
+                                <div className={`${control.time ? "" : "hidden"} col-span-3 text-right flex flex-col justify-center`}>
                                   <div className="font-mono pr-2 text-lg font-black text-zinc-100 tracking-tight leading-none">
-                                    {rider.lsTm || "--:--.---"}
+                                    {isLeader ? (rider.lsTm || "--:--.---") : (rider.gp || rider.df || "--:--.---")}
                                   </div>
                                   {/* <div className="text-[10px] text-zinc-500 font-mono mt-1.5 leading-none uppercase tracking-wider flex items-center justify-end gap-1">
                                     <span className="font-bold">BEST:</span> {rider.btTm || "--:--.---"}
@@ -1832,7 +1847,7 @@ export default function App() {
                                 
                               </div>
                               
-                              <div className={`${controlAction === 'SHOW_LAPS' ? '' : 'hidden'} text-left flex flex-row text-lg text-blue-400 font-black mt-1.5 leading-none uppercase tracking-wider flex items-center justify-end gap-1 border-zinc-800 rounded px-2 bg-zinc-400/50`}>
+                              <div className={`${control.laps ? '' : 'hidden'} text-left flex flex-row text-lg text-blue-400 font-black mt-1.5 leading-none uppercase tracking-wider flex items-center justify-end gap-1 border-zinc-800 rounded px-2 bg-zinc-400/50`}>
                                 <span className="font-bold">BEST:</span> {rider.btTm || "--:--.---"}
                                 {rider.ls !== undefined && (
                                   <span className="text-zinc-650 bg-zinc-950 px-1 py-0.2 rounded font-normal text-[8px] border border-zinc-850 ml-1">laps{rider.ls}</span>
@@ -1854,6 +1869,6 @@ export default function App() {
           element={<Navigate to="/sidePosition" replace />} 
         />
       </Routes>
-    </HashRouter>
+    </BrowserRouter>
   );
 }

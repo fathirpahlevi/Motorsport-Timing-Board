@@ -1,17 +1,15 @@
 import React, { useState } from 'react';
 
-type DisplayState = 'SHOW_LAPS' | 'HIDE_LAPS' | 'RESET';
-
+type DisplayState = 'laps' | 'time' | 'reset';
 // Define the shape of the props the component expects
 interface DisplayControllerProps {
     socket: WebSocket | null;
     connectionStatus: string;
 }
-
 export const DisplayController: React.FC<DisplayControllerProps> = ({ socket, connectionStatus }) => {
     const [localStatus, setLocalStatus] = useState<string>('Ready');
 
-    const sendControlCommand = (command: DisplayState) => {
+    const sendControlCommand = (command: DisplayState, state: boolean) => {
     // Guard clause: check if socket is passed and actually open
     if (!socket || socket.readyState !== WebSocket.OPEN) {
         setLocalStatus('Error: Server connection is offline.');
@@ -21,7 +19,7 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({ socket, co
     const payload = {
         type: 'control',    
         target: 'sideposition',
-        action: command,
+        action: {[command]: state},
         timestamp: Date.now(),
     };
 
@@ -45,7 +43,7 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({ socket, co
 
         <div className="flex flex-col gap-3">
             <button 
-            onClick={() => sendControlCommand('SHOW_LAPS')} 
+            onClick={() => sendControlCommand('laps',true)} 
             disabled={connectionStatus !== 'connected'}
             className="w-full py-3 px-6 text-white font-semibold rounded-lg bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
             >
@@ -53,15 +51,31 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({ socket, co
             </button>
 
             <button 
-            onClick={() => sendControlCommand('HIDE_LAPS')} 
+            onClick={() => sendControlCommand('laps',false)} 
             disabled={connectionStatus !== 'connected'}
             className="w-full py-3 px-6 text-white font-semibold rounded-lg bg-rose-500 hover:bg-rose-600 active:bg-rose-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
             >
             Hide Laps
             </button>
+            
+            <button 
+            onClick={() => sendControlCommand('time',true)} 
+            disabled={connectionStatus !== 'connected'}
+            className="w-full py-3 px-6 text-white font-semibold rounded-lg bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
+            >
+            Show Time
+            </button>
 
             <button 
-            onClick={() => sendControlCommand('RESET')} 
+            onClick={() => sendControlCommand('time',false)} 
+            disabled={connectionStatus !== 'connected'}
+            className="w-full py-3 px-6 text-white font-semibold rounded-lg bg-rose-500 hover:bg-rose-600 active:bg-rose-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
+            >
+            Hide Time
+            </button>
+
+            <button 
+            onClick={() => sendControlCommand('reset',true)} 
             disabled={connectionStatus !== 'connected'}
             className="w-full py-3 px-6 text-white font-semibold rounded-lg bg-slate-500 hover:bg-slate-600 active:bg-slate-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
             >
