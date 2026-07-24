@@ -4,6 +4,7 @@ import http from "http";
 import { WebSocketServer, WebSocket as WSClient } from "ws";
 import { HubConnectionBuilder, HubConnection } from "@microsoft/signalr";
 import { createServer as createViteServer } from "vite";
+import { error } from "console";
 
 interface SessionSubscription {
   connection: HubConnection;
@@ -173,18 +174,18 @@ async function startServer() {
     allClients.add(ws);
 
     // Send the current full state immediately to the newly connected client
-    sendToClient(ws, {
-      type: "syncState",
-      eventId: raceState.eventId || savedID.eventId,
-      sessionId: raceState.sessionId || savedID.sessionId,
-      results: raceState.results,
-      sessionInfo: raceState.sessionInfo,
-      announcement: raceState.announcement,
-      stats: raceState.stats,
-      controlAction: raceState.controlAction,
-      isTimerRunning: raceState.isTimerRunning,
-      raceSeconds: raceState.raceSeconds
-    });
+    // sendToClient(ws, {
+    //   type: "syncState",
+    //   eventId: raceState.eventId || savedID.eventId,
+    //   sessionId: raceState.sessionId || savedID.sessionId,
+    //   results: raceState.results,
+    //   sessionInfo: raceState.sessionInfo,
+    //   announcement: raceState.announcement,
+    //   stats: raceState.stats,
+    //   controlAction: raceState.controlAction,
+    //   isTimerRunning: raceState.isTimerRunning,
+    //   raceSeconds: raceState.raceSeconds
+    // });
 
     // If there is already an active session, notify them to switch/subscribe
     if (savedID.sessionId) {
@@ -289,13 +290,43 @@ async function startServer() {
           }
         }
         else if (message.type === 'control') {
-          console.log(`[WS Server] Control action broadcast:`, message.action);
-          if (message.action && message.action.reset) {
-            raceState.controlAction = {};
-          } else {
-            raceState.controlAction = { ...raceState.controlAction, ...message.action };
-          }
-          broadcastToAll({ type: 'control', action: message.action });
+          raceState.controlAction = {
+            ...raceState.controlAction, // 1. Spread out all existing keys (e.g., { laps: true })
+            ...message.action           // 2. Spread the new keys, overwriting existing matching ones (e.g., { time: true })
+          };
+          console.log(`[WS Server] Control action broadcast:`, raceState.controlAction );
+          broadcastToAll({ type: "control", action:raceState.controlAction });
+        }
+        else if(message.type === 'inputDevice'){
+          broadcastToAll({type:"inputDevice", inputDevice:message});
+          sendToClient(ws, { type: "inputDevice", inputDevice:message });
+        }
+        else if(message.type === 'inputDevices'){
+          broadcastToAll({type:"inputDevices", inputDevices:message});
+          sendToClient(ws, { type: "inputDevices", inputDevices:message });
+        }
+        else if(message.type === 'askInputDevices'){
+          broadcastToAll({type:"askInputDevices"});
+          sendToClient(ws, { type: "askInputDevices"});
+        }
+        else if(message.type === 'videoURL'){
+          broadcastToAll({type:"video",url:message});
+          sendToClient(ws, { type: "video", url:message });
+        }
+        else if (message.type === 'syncState'){
+          sendToClient(ws, { type: "syncState", raceState });
+        }
+        else if (message.type === 'videoStatus'){
+          broadcastToAll({type:"videoStatus", status:message.status});
+          sendToClient(ws, { type: "videoStatus", status:message.status});
+        }
+        else if (message.type === 'errorMessage'){
+          broadcastToAll({type:"errorMessage", error:message.error});
+          sendToClient(ws, { type: "errorMessage", error:message.error});
+        }
+        else if (message.type === 'speedhiveURL'){
+          broadcastToAll({type:"speedhiveURL", url:message.url});
+          sendToClient(ws, { type: "speedhiveURL", url:message.url});
         }
         else if (message.type === 'stopwatch') {
           console.log(`[WS Server] Stopwatch sync: running=${message.action === 'start'}, seconds=${message.raceSeconds}`);
@@ -311,6 +342,7 @@ async function startServer() {
             raceSeconds: raceState.raceSeconds
           });
         }
+        //Mainwebsocket
       } catch (err) {
         console.error("[WS Server] Error handling incoming client message:", err);
       }

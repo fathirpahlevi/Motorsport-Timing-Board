@@ -83,4 +83,11 @@
     background-position: center;
     opacity:1;
   }
+  .logoYcr{
+    background-image: url("img/logoYcr.png");
+    top: 0; left: 0;
+    background-size: cover; /* or contain */
+    background-position: center;
+    opacity:1;
+  }
 }

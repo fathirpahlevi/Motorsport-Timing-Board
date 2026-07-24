@@ -42,11 +42,35 @@ import {
 import { RiderResult, SignalRPacket } from './types';
 import { INITIAL_RIDERS, recalculateGaps, parseLapTimeToMs, formatLapTime } from './data';
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { RaceResultPage } from './components/resultPage';
 import {DisplayController} from './components/control';
 
+import { ListSelectInput, SelectOption } from './components/lists';
+
+interface RacerResult {
+    id: string;
+    position: number;
+    riderNo: string | number;
+    riderName: string;
+    teamGroup: string;       // Racer's team or group (e.g. "Monster Energy Yamaha" or "Group A")
+    totalTime: string;      // Total race time or gap (e.g. "23:45.123" or "+1.234s")
+    bestLapTime: string;    // Best lap time (e.g. "1:28.452")
+    hasFastestLap?: boolean;// Flag for fastest lap record in the session
+    status?: 'FINISHED' | 'DNF' | 'DNS' | 'DSQ';
+}
+interface RaceEventData {
+    eventName: string;       // e.g. "GRAN PREMIO D'ITALIA OAKLEY"
+    groupName: string;       // e.g. "MOTOGP - RACE RESULTS" or "GROUP 1 - FINAL"
+    sessionDate: string;      // e.g. "2026-07-23"
+    circuitName: string;     // e.g. "Autodromo Internazionale del Mugello"
+    lapsCompleted: number;  // e.g. 23
+    racers: RacerResult[];
+}
 interface ControlState {
   laps?: boolean;
   time?: boolean;
+  input?: boolean;
+  rtmp?: boolean;
   [key: string]: boolean | undefined; // Allows for any other dynamic boolean/keys you might send later
 }
 
@@ -101,29 +125,384 @@ function fitName(name: string, maxLength: number) {
         if (short.length <= maxLength) {
             return short;
         }
+        
+        const short2 = `${parts[0]} ${parts[1][0]}`;
+        if(short2.length <= maxLength)
+        return short2;
+        return `${parts[0][0]} ${parts[1].slice(0,3)}`;
 
-        return `${parts[0]} ${parts[1][0]}`;
     }
 
     return `${parts[0]} ${parts.slice(1)
         .map(x => x[0])
         .join(" ")}`;
 }
-
+  // Attach WebRTC MediaStream to the video element
 export default function App() {
-  // Speedhive URL and Track Settings
-  const [speedhiveUrl, setSpeedhiveUrl] = useState<string>(() => {
-    return localStorage.getItem('speedhive_url') || '';
-  });
-  const [raceLaps, setRaceLaps] = useState<number>(() => {
-    return parseInt(localStorage.getItem('race_laps') || '0', 10);
-  });
+  const [speedhiveUrl, setSpeedhiveUrl] = useState<string>();
+  const resultData = useRef<RaceEventData>;
+  const [raceLaps, setRaceLaps] = useState<number>();
   const [isClosedLoop, setIsClosedLoop] = useState<boolean>(() => {
     return localStorage.getItem('is_closed_loop') !== 'false';
   });
+  const [showLTG, setShowLTG] = useState<boolean>(false);
+  const [showLaps, setShowLaps] = useState<boolean>(false);
+  const [showBanner, setShowBanner] = useState<boolean>(true);
+
+  const [stream, setStream] = useState<string>('http://localhost:8889/live/iPhone/');
+  const [useWebcam, setUseWebcam] = useState<boolean>(true);
+  const [inputDevice, setInputDevice] = useState<string>('');
+  const inputDeviceRef = useRef('');
+  const lastInputDevicesRef = useRef<SelectOption[]>([]);
+  
+  const [inputDevices,setInputDevices] = useState<SelectOption[]>([]);
+  const [inputDevicesOption,setInputDevicesOption] = useState<SelectOption[]>([]);
+  // 1. Move device fetching inside a useEffect
+  useEffect(() => {
+    // Only query devices if we are on the /sideposition route
+    console.log("RUNS ON location.pathname useeffect:", location.pathname);
+    if (location.pathname !== '/sideposition') return;
+
+    let isMounted = true;
+
+    const getVideoInput = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoInputDevices = devices
+          .filter((device) => device.kind === 'videoinput')
+          .map((device) => ({
+            value: device.deviceId,
+            label: device.label || 'Video Input',
+          }));
+
+        if (isMounted) {
+          setInputDevices(videoInputDevices);
+        }
+      } catch (err: any) {
+        console.error('Failed to enumerate devices:', err);
+      }
+    };
+
+    getVideoInput();
+
+    // Listen for device changes (e.g. user plugs/unplugs a USB camera)
+    navigator.mediaDevices.addEventListener('devicechange', getVideoInput);
+
+    return () => {
+      isMounted = false;
+      navigator.mediaDevices.removeEventListener('devicechange', getVideoInput);
+    };
+  }, [location.pathname]); // Re-runs if the user navigates to /sideposition
+
+
+  // 2. Your WebSocket sender useEffect stays clean
+  useEffect(() => {
+    const isWsOpen = connectionRef.current?.readyState === WebSocket.OPEN;
+    const isSidePosition = location.pathname === '/sideposition';
+    const hasDevicesChanged = inputDevices !== lastInputDevicesRef.current;
+    if (isSidePosition && isWsOpen && hasDevicesChanged) {
+    console.log("Sending websock");
+      connectionRef.current?.send(
+        JSON.stringify({
+          type: 'inputDevices',
+          devices: inputDevices,
+        })
+      );
+    }
+
+    lastInputDevicesRef.current = inputDevices;
+  }, [inputDevices, location.pathname]);
+  // }
+  useEffect(() => {
+    inputDeviceRef.current = inputDevice;
+
+    // 1. Explicitly stop stream if on /sideposition OR no input device selected
+    if (!inputDevice || location.pathname !== '/sideposition') {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      setVideoStatus('error');
+      setErrorMessage('Video disabled on this route');
+      return;
+    }
+
+    let isMounted = true;
+    setVideoStatus('connecting');
+    setErrorMessage('');
+
+    const startWebcam = async () => {
+      try {
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            deviceId: { exact: inputDevice }
+          },
+          audio: false
+        });
+
+        if (!isMounted) {
+          mediaStream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        streamRef.current = mediaStream;
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+          await videoRef.current.play();
+          setVideoStatus('connected');
+        }
+      } catch (err: any) {
+        if (!isMounted) return;
+        console.error("Webcam access denied or failed:", err);
+        setVideoStatus('error');
+
+        const msg = err.name === 'NotAllowedError'
+          ? 'Camera permission denied by browser'
+          : err.name === 'NotFoundError'
+          ? 'No camera device found'
+          : 'Failed to access browser camera';
+
+        setErrorMessage(msg);
+        setControlVideoStatus(msg);
+      }
+    };
+
+    startWebcam();
+
+    // 2. Global cleanup on unmount or when dependencies change
+    return () => {
+      isMounted = false;
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+    };
+}, [inputDevice, location.pathname]);
+
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [status, setStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
+  const [videoStatus, setVideoStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
+  const [controlVideoStatus, setControlVideoStatus] = useState<string>('connecting');
+  const [errorMessageControl, setErrorMessageControl] = useState<string>('');
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  useEffect(() => {
+    if(connectionRef.current && connectionRef.current.readyState === WebSocket.OPEN && location.pathname === '/sideposition'){
+      if(videoStatus){
+        connectionRef.current.send(JSON.stringify({
+            type: 'videoStatus',
+            status:videoStatus
+          }));
+      }
+      if(errorMessage){
+        connectionRef.current.send(JSON.stringify({
+            type: 'errorMessage',
+            error: errorMessage
+          }));
+      }
+    } 
+  }, [videoStatus,errorMessage]);
+
+  useEffect(() => {
+    if (!useWebcam || location.pathname !== '/sideposition' || !inputDeviceRef.current){
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+      return;
+    }
+
+
+    let isMounted = true;
+    setVideoStatus('connecting');
+    setErrorMessage('');
+
+    const startWebcam = async () => {
+      try {
+        // 1. Request access to camera and microphone
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            deviceId: {
+              exact: inputDeviceRef.current,
+            }
+          },
+          audio: false // Set to true if you want webcam mic audio
+        });
+        
+        if (!isMounted) {
+          // If unmounted before permission granted, stop all tracks
+          mediaStream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        streamRef.current = mediaStream;
+
+        // 2. Attach stream to HTML5 Video element
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+          await videoRef.current.play();
+          setVideoStatus('connected');
+        }
+      } catch (err: any) {
+        if (!isMounted) return;
+        console.error("Webcam access denied or failed:", err);
+        setVideoStatus('error');
+
+        if (err.name === 'NotAllowedError') {
+          setErrorMessage('Camera permission denied by browser');
+          setControlVideoStatus('Camera permission denied by browser');
+        } else if (err.name === 'NotFoundError') {
+          setErrorMessage('No camera device found');
+          setControlVideoStatus('Camera permission denied by browser');
+        } else {
+          setErrorMessage('Failed to access browser camera');
+          setControlVideoStatus('Failed to access browser camera');
+        }
+      }
+    };
+
+    startWebcam();
+
+    // Cleanup: Turn off camera light/hardware when component unmounts
+    return () => {
+      isMounted = false;
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+    };
+  }, [useWebcam]);
+  
+  // const videoRef = useRef<HTMLVideoElement | null>(null);
+  // const pcRef = useRef<RTCPeerConnection | null>(null);
+  // const [status, setStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
+  // const [errorMessage, setErrorMessage] = useState<string>('');
+
+  // useEffect(() => {
+  //   if (!stream) return;
+    
+  //   console.log("VIDEO URL:",stream);
+  //   let isMounted = true;
+  //   setStatus('connecting');
+  //   setErrorMessage('');
+
+  //   const connectWebRTC = async () => {
+  //     try {
+  //       // Clean up existing connection before creating a new one
+  //       if (pcRef.current) {
+  //         pcRef.current.close();
+  //       }
+
+  //       const pc = new RTCPeerConnection({
+  //         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+  //       });
+  //       pcRef.current = pc;
+
+  //       pc.addTransceiver('video', { direction: 'recvonly' });
+  //       pc.addTransceiver('audio', { direction: 'recvonly' });
+
+  //       pc.ontrack = (event) => {
+  //         if (videoRef.current && event.streams[0]) {
+  //           videoRef.current.srcObject = event.streams[0];
+  //           videoRef.current.play().catch(() => {
+  //             if (videoRef.current) {
+  //               videoRef.current.muted = true;
+  //               videoRef.current.play();
+  //             }
+  //           });
+  //         }
+  //       };
+
+  //       pc.onconnectionstatechange = () => {
+  //         if (!isMounted) return;
+  //         if (pc.connectionState === 'connected') {
+  //           setStatus('connected');
+  //         } else if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+  //           setStatus('error');
+  //           setErrorMessage('Stream connection lost');
+  //         }
+  //       };
+
+  //       const offer = await pc.createOffer();
+  //       await pc.setLocalDescription(offer);
+
+  //       // --- FIX 1: Wait for ICE Gathering ---
+  //       if (pc.iceGatheringState !== 'complete') {
+  //         await new Promise<void>((resolve) => {
+  //           const checkState = () => {
+  //             if (pc.iceGatheringState === 'complete') {
+  //               pc.removeEventListener('icegatheringstatechange', checkState);
+  //               resolve();
+  //             }
+  //           };
+  //           pc.addEventListener('icegatheringstatechange', checkState);
+  //           // Safety timeout in case STUN server hangs
+  //           setTimeout(resolve, 2000); 
+  //         });
+  //       }
+
+  //       if (!isMounted) return;
+
+  //       // Send SDP with complete ICE candidates
+  //       const response = await fetch(stream, {
+  //         method: 'POST',
+  //         headers: { 'Content-Type': 'application/sdp' },
+  //         body: pc.localDescription?.sdp || offer.sdp
+  //       });
+
+  //       if (!response.ok) {
+  //         throw new Error(`Server returned HTTP ${response.status}`);
+  //       }
+
+  //       const answerSdp = await response.text();
+        
+  //       if (!isMounted) return;
+
+  //       await pc.setRemoteDescription({
+  //         type: 'answer',
+  //         sdp: answerSdp
+  //       });
+
+  //     } catch (err: any) {
+  //       if (!isMounted) return;
+  //       console.error("WebRTC connection failed:", err);
+  //       setStatus('error');
+  //       setErrorMessage(err.message || 'Failed to connect to stream URL');
+  //     }
+  //   };
+
+  //   connectWebRTC();
+
+  //   return () => {
+  //     isMounted = false;
+  //     if (pcRef.current) {
+  //       pcRef.current.close();
+  //       pcRef.current = null;
+  //     }
+  //   };
+  // }, [stream]);
+
+  const [control, setControl] = useState<ControlState>({});
 
   
-  const [control, setControl] = useState<ControlState>({});
+  useEffect(() => {
+    if(control.laps || control.ltg){
+      setShowBanner(true);
+    }
+    else{
+      setShowBanner(false);
+    }
+    if(control.rtmp)setUseWebcam(false);
+    if(control.input)setUseWebcam(true);
+  }, [control]);
 
   // Display states mapped from Speedhive events
   const [raceTitle, setRaceTitle] = useState<string>('-');
@@ -153,7 +532,7 @@ export default function App() {
       }
       sessionIdRef.current = savedSessionId;
       // if(!savedSessionId){ 
-        console.log("Trying to fetch initial data for new sessionId");
+        // console.log("Trying to fetch initial data for new sessionId");
         initialLoadRef.current = false;
         async function fetchData() {
           try {
@@ -179,6 +558,10 @@ export default function App() {
 
   }, [savedSessionId]);
 
+  const handleSpeedHiveUrl = (passedSpeedhiveUrl: string) =>{
+    // console.log("url received", passedSpeedhiveUrl);
+    setSpeedhiveUrl(passedSpeedhiveUrl);
+  };
   // Scrolling Announcements from hub
   const [latestAnnouncement, setLatestAnnouncement] = useState<string>('');
 
@@ -201,7 +584,7 @@ export default function App() {
   // Simulation Controls (Moved entirely into the collapsible Setup Drawer)
   const [autoSimulate, setAutoSimulate] = useState<boolean>(false);
   const [simSpeedSeconds, setSimSpeedSeconds] = useState<number>(4);
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(false);
   const [selectedRiderId, setSelectedRiderId] = useState<string | null>(null);
   
   // Custom Race Stopwatch variables
@@ -298,6 +681,31 @@ export default function App() {
       currentPositions[r.id] = r.lbpos;
     });
     previousPositionsRef.current = currentPositions;
+    const hasActiveHighlights = riders.some(
+      (r) => r.changeDirection !== 'steady' && Date.now() - r.changeTime < 3000
+    );
+
+    if (!hasActiveHighlights) return;
+
+    // Check back every 100ms to clean up expired rows smoothly
+    const timer = setInterval(() => {
+      setRiders((currentRiders) => {
+        let updated = false;
+        
+        const nextRiders = currentRiders.map((rider) => {
+          if (rider.changeDirection !== 'steady' && Date.now() - rider.changeTime >= 3000) {
+            updated = true;
+            return { ...rider, changeDirection: 'steady' as const };
+          }
+          return rider;
+        });
+
+        // Avoid unnecessary re-renders if nothing actually expired during this tick
+        return updated ? nextRiders : currentRiders;
+      });
+    }, 100);
+
+    return () => clearInterval(timer);
   }, [riders]);
 
   // Add websocket log entry
@@ -316,14 +724,12 @@ export default function App() {
       ].slice(0, 35);
     });
   };
-
-  // Inject SignalR Telemetry timing package
   const injectSignalRPacket = (packetObj: SignalRPacket) => {
     if (!packetObj || !Array.isArray(packetObj.results)) {
       addWebSocketLog('system', "❌ SignalR Error: results is not a valid array");
       return;
     }
-
+    // console.log("RAW Packet", packetObj);
     setRiders((prevRiders) => {
       const riderMap = new Map<string, RiderResult>();
       prevRiders.forEach((r) => {
@@ -332,18 +738,30 @@ export default function App() {
 
       let sessionBestImproved = false;
       let overtakeHappened = false;
+      const rawGapsMap = new Map<string, { gp?: string; df?: string }>();
 
       const mergedRiders = packetObj.results.map((incoming) => {
+        rawGapsMap.set(incoming.id, { gp: incoming.gp, df: incoming.df });
+
         const existing = riderMap.get(incoming.id);
         const originalPos = existing ? existing.lbpos : undefined;
+        
+        // Default to incoming delta value if provided, else steady
         let changeDirection: 'up' | 'down' | 'steady' = 'steady';
+        let changeTime = existing ? existing.changeTime : Date.now();
 
         if (originalPos !== undefined && incoming.lbpos !== undefined) {
           if (incoming.lbpos < originalPos) {
             changeDirection = 'up';
+            changeTime = Date.now(); // Track exactly when it went up
             overtakeHappened = true;
           } else if (incoming.lbpos > originalPos) {
             changeDirection = 'down';
+            changeTime = Date.now(); // Track exactly when it went down
+          } else {
+            // If the position didn't change in this packet, retain the old direction 
+            // if it hasn't expired yet (we check expiration inside the cleanup loop)
+            changeDirection = existing ? existing.changeDirection : 'steady';
           }
         }
 
@@ -363,7 +781,7 @@ export default function App() {
           ...existing,
           ...incoming,
           prevPos: originalPos,
-          changeTime: Date.now(),
+          changeTime,
           changeDirection,
           ibt: isAbsoluteFastest ? true : (incoming.ibt || (existing ? existing.ibt : false))
         } as RiderResult;
@@ -375,6 +793,18 @@ export default function App() {
       const fullRaceGroup = [...mergedRiders, ...omittedRiders];
       const sortedPack = recalculateGaps(fullRaceGroup);
 
+      const finalPack = sortedPack.map((rider) => {
+        const rawGaps = rawGapsMap.get(rider.id);
+        if (rawGaps) {
+          return {
+            ...rider,
+            gp: rawGaps.gp !== undefined ? rawGaps.gp : rider.gp,
+            df: rawGaps.df !== undefined ? rawGaps.df : rider.df,
+          };
+        }
+        return rider;
+      });
+      // console.log("new Data", finalPack);
       if (sessionBestImproved) {
         playBeep('bestlap');
       } else if (overtakeHappened) {
@@ -383,41 +813,67 @@ export default function App() {
         playBeep('tick');
       }
 
-      return sortedPack;
+      return finalPack;
     });
   };
-
   // Fetch initial Speedhive timing state via Express API proxy to bypass CORS
   const fetchInitialData = async (eventId: string, sessionId: string) => {
     addWebSocketLog('system', `🔍 Querying initial racing board session: ${sessionId}`);
     try {
+      if (connectionRef.current) {
+        try {
+          connectionRef.current.close();
+        } catch (e) {
+          // ignore
+        }
+      }
       const url = eventId && sessionId ? `/api/speedhive-proxy?eventId=${eventId}&sessionId=${sessionId}` : `/api/speedhive-proxy`;
       const res = await fetch(url);
       if (!res.ok) {
         throw new Error(`Speedhive API returned ${res.status} (${res.statusText})`);
       }
       const data = await res.json();
+      if(data)console.log("Initial data fetched", data);
       
       if (data.eNam) setRaceTitle(data.eNam);
       if (data.rnNam) setSessionName(data.rnNam);
       if (data.gNam) setGroupName(data.gNam);
       if (data.btLpTim) setSessionBestTime(data.btLpTim);
-      if (data.ls) setRaceLaps(data.ls);
+      // if (data.ls) setRaceLaps(data.ls);
       if (data.ls) setLaps(data.ls);
       if (data.lsTg) setLapsToGo(data.lsTg);
       if (typeof data.f === "number") setFlag(data.f);
       if (data.id) setSessionId(data.id);
       if (data.eventId) setEventId(data.eventId);
       if (data.l && Array.isArray(data.l)) {
-        const sorted = recalculateGaps(data.l);
-        setRiders(sorted);
-        
-        const bestRider = sorted.find(r => r.ibt || r.btTm === data.btLpTim);
-        if (bestRider) {
-          setSessionBestRider(bestRider.nam);
-        }
-        addWebSocketLog('system', `📊 Received ${sorted.length} starter grid positions from Speedhive API.`);
+      // Map and preserve the initial raw gp and df values from Speedhive
+      const rawGapsMap = new Map<string, { gp?: string; df?: string }>();
+      data.l.forEach((r: RiderResult) => {
+        rawGapsMap.set(r.id, { gp: r.gp, df: r.df });
+      });
+
+      const sorted = recalculateGaps(data.l);
+
+      // Restore initial raw gap strings
+      const finalInitialData = sorted.map((rider) => {
+        const rawGaps = rawGapsMap.get(rider.id);
+        return {
+          ...rider,
+          gp: rawGaps?.gp ?? rider.gp,
+          df: rawGaps?.df ?? rider.df,
+          gpCl: rawGaps?.gp ?? rider.gpCl,
+          dfCl: rawGaps?.df ?? rider.dfCl,
+        };
+      });
+
+      setRiders(finalInitialData);
+
+      const bestRider = finalInitialData.find(r => r.ibt || r.btTm === data.btLpTim);
+      if (bestRider) {
+        setSessionBestRider(bestRider.nam);
       }
+      addWebSocketLog('system', `📊 Received ${finalInitialData.length} starter grid positions from Speedhive API.`);
+    }
       return { eventId: data.eventId, sessionId: data.sessionId };
     } catch (err: any) {
       console.error("Speedhive proxy fetch error:", err);
@@ -449,7 +905,7 @@ export default function App() {
   };
 
   // Connect to our backend WebSocket proxy
-  const connectSignalR = (sessionId: string) => {
+  const connectSignalR = (sessionId: string) => { //MainWebsocket
     if (connectionRef.current) {
       try {
         connectionRef.current.close();
@@ -496,55 +952,14 @@ export default function App() {
           if (message.type === "newConnection") {
             addWebSocketLog('system', `📡 New connection detected`);
             if(message.sessionId !== sessionIdRef.current) {
-              console.log("New Session Id", message.sessionId);   
+              // console.log("New Session Id", message.sessionId);   
               setLatestAnnouncement("");
               setSessionId(message.sessionId);
             }
           }
-          else if (message.type === "syncState") {
-            addWebSocketLog('system', `📡 Received full race state sync from server.`);
-            if (message.sessionId && message.sessionId !== sessionIdRef.current) {
-              setSessionId(message.sessionId);
-            }
-            if (message.eventId) {
-              setEventId(message.eventId);
-            }
-            if (message.results && Array.isArray(message.results.results)) {
-              injectSignalRPacket(message.results);
-            }
-            if (message.sessionInfo) {
-              const data = message.sessionInfo;
-              if (data.eNam) setRaceTitle(data.eNam);
-              if (data.rnNam) setSessionName(data.rnNam);
-              if (data.gNam) setGroupName(data.gNam);
-              if (data.btLpTim) setSessionBestTime(data.btLpTim);
-              if (data.ls) setRaceLaps(data.ls);
-              if (data.ls) setLaps(data.ls);
-              if (data.lsTg) setLapsToGo(data.lsTg);
-              if (typeof data.f === "number") setFlag(data.f);
-            }
-            if (message.announcement) {
-              setLatestAnnouncement(message.announcement);
-            }
-            if (message.stats) {
-              const data = message.stats;
-              if (data.bestLapTime) {
-                setSessionBestTime(data.bestLapTime);
-                if (data.bestLapDriverName) {
-                  setSessionBestRider(data.bestLapDriverName);
-                }
-              }
-            }
-            if (message.controlAction) {
-              setControlAction(message.controlAction);
-              setControl(message.controlAction);
-            }
-            if (typeof message.isTimerRunning === "boolean") {
-              setIsTimerRunning(message.isTimerRunning);
-            }
-            if (typeof message.raceSeconds === "number") {
-              setRaceSeconds(message.raceSeconds);
-            }
+          else if(message.type === "speedhiveURL"){
+              // console.log("New Speedhive URL", message.url);
+              handleLoadSpeedhiveSession(message.url)
           }
           else if (message.type === "stopwatchState") {
             if (typeof message.isTimerRunning === "boolean") {
@@ -552,10 +967,46 @@ export default function App() {
             }
             if (typeof message.raceSeconds === "number") {
               setRaceSeconds(message.raceSeconds);
+              // console.log("seconds",message.raceSeconds);
             }
+          }
+          else if(message.type === "videoStatus"){
+            // console.log("videoStatus", message.status);
+            setControlVideoStatus(message.status);
+          }
+          else if(message.type === 'askInputDevices' && location.pathname === "/sideposition"){
+            socket.send(
+              JSON.stringify({
+                type: 'inputDevices',
+                devices: lastInputDevicesRef.current,
+              })
+            );
           }
           else if (message.type === "status") {
             if (message.status === "connected") {
+                socket.send(JSON.stringify({
+                  type: "syncState",
+                  sessionId: sessionId,
+                  newSessionId: sessionId
+                }));
+            if(location.pathname === "/sideposition" || location.pathname === "/sideposition/"){
+              console.log("Sending to control");
+            socket.send(
+              JSON.stringify({
+                type: 'inputDevices',
+                devices: inputDevices,
+              })
+            );
+
+            }
+            if(location.pathname === "/control"){
+              console.log("Asking input devices");
+              socket.send(
+              JSON.stringify({
+                type: 'askInputDevices'
+              })
+            );
+            }
               setConnectionStatus('connected');
               addWebSocketLog('system', `🟢 Speedhive session subscription verified. Telemetry active.`);
             } else if (message.status === "connecting") {
@@ -584,7 +1035,7 @@ export default function App() {
               if (data.rnNam) setSessionName(data.rnNam);
               if (data.gNam) setGroupName(data.gNam);
               if (data.btLpTim) setSessionBestTime(data.btLpTim);
-              if (data.ls) setRaceLaps(data.ls);
+              // if (data.ls) setRaceLaps(data.ls);
               if (data.ls) setLaps(data.ls);
               if (data.lsTg) setLapsToGo(data.lsTg);
               if (typeof data.f === "number") setFlag(data.f);
@@ -616,17 +1067,79 @@ export default function App() {
               }
             }
           } else if(message.type === "control" && message.action){
-            console.log("Control action received:", message.action);
-            setControl((prevControl) => {
-              if (message.action.reset) {
-                return {};
-              }
-              return {
-                ...prevControl,
-                ...message.action
-              };
-            });
+            // console.log("Control action received:", message.action);
+            setControl((prevControl) => ({
+              ...prevControl, // Keep all previous keys (e.g., laps: true)
+              ...message.action  // Add or overwrite with new keys (e.g., time: true)
+            }));
+            if(control.laps || control.ltg)setShowBanner(true);
             setControlAction(message.action);
+          }
+          else if(message.type === 'video'){
+            setStream(message.url);
+            // console.log("url sent:", message.url);
+          }
+          else if(message.type === 'errorMessage'){
+            setErrorMessageControl(message.error);
+            // console.log("Error msg sent:", message.error);
+          }
+          else if(message.type === "inputDevice"){
+            // console.log("input Device msg", message);
+            setInputDevice(message.inputDevice.device);
+            // console.log("Set Input Device", message.inputDevice.device);
+          }
+          else if(message.type === "inputDevices"){
+            console.log("Received inputs",message);
+            setInputDevicesOption(message.inputDevices.devices);
+          }
+          else if (message.type === "syncState") {
+            addWebSocketLog('system', `📡 Received full race state sync from server.`);
+            // console.log("Received full race state sync from server. control", message);
+            if (message.raceState.sessionId && message.raceState.sessionId !== sessionIdRef.current) {
+              setSessionId(message.raceState.sessionId);
+            }
+            if (message.raceState.eventId) {
+              setEventId(message.raceState.eventId);
+            }
+            if (message.raceState.results && Array.isArray(message.raceState.results.results)) {
+              injectSignalRPacket(message.raceState.results);
+            }
+            if (message.raceState.sessionInfo) {
+              const data = message.raceState.sessionInfo;
+              if (data.eNam) setRaceTitle(data.eNam);
+              if (data.rnNam) setSessionName(data.rnNam);
+              if (data.gNam) setGroupName(data.gNam);
+              if (data.btLpTim) setSessionBestTime(data.btLpTim);
+              // if (data.ls) setRaceLaps(data.ls);
+              if (data.ls) setLaps(data.ls);
+              if (data.lsTg) setLapsToGo(data.lsTg);
+              if (typeof data.f === "number") setFlag(data.f);
+            }
+            if (message.raceState.announcement) {
+              setLatestAnnouncement(message.raceState.announcement);
+            }
+            if (message.raceState.stats) {
+              const data = message.raceState.stats;
+              if (data.bestLapTime) {
+                setSessionBestTime(data.bestLapTime);
+                if (data.bestLapDriverName) {
+                  setSessionBestRider(data.bestLapDriverName);
+                }
+              }
+            }
+            if (message.raceState.controlAction) {
+              setControl((prevControl) => ({
+              ...prevControl, // Keep all previous keys (e.g., laps: true)
+              ...message.raceState.controlAction  // Add or overwrite with new keys (e.g., time: true)
+            }));
+              // console.log("Control action updated from syncState:", message.raceState.controlAction);
+            }
+            if (typeof message.raceState.isTimerRunning === "boolean") {
+              setIsTimerRunning(message.raceState.isTimerRunning);
+            }
+            if (typeof message.raceState.raceSeconds === "number") {
+              setRaceSeconds(message.raceState.raceSeconds);
+            }
           }
 
         } catch (err: any) {
@@ -666,6 +1179,8 @@ export default function App() {
     const urlToUse = customUrl || speedhiveUrl;
     if (!urlToUse) return;
 
+    // console.log("Handling:",urlToUse);
+
     const { eventId, sessionId } = parseSpeedhiveUrl(urlToUse);
     if (!sessionId) {
       addWebSocketLog('system', `❌ Error: URL does not match Speedhive session syntax.`);
@@ -690,25 +1205,6 @@ export default function App() {
     // 2. Spawn WebSockets
     connectSignalR(sessionId);
   };
-
-  // Run automatically on component startup to restore past session if saved
-  // useEffect(() => {
-  //    async function fetchData() {
-  //       try {
-  //           await fetchInitialData("", "");
-  //           connectSignalR(sessionIdRef.current);
-  //       } catch (error) {
-  //           console.error(error);
-  //           return () => {
-  //             if (connectionRef.current) {
-  //               connectionRef.current.close();
-  //             }
-  //           };
-  //       }
-  //     }
-
-  //     fetchData();
-  // }, []);
 
   // Simulator loop to swap grid position dynamically for demonstration testing
   useEffect(() => {
@@ -920,10 +1416,14 @@ export default function App() {
     });
     playBeep('tick');
   };
+  const sortedRiders = [...riders].sort((a, b) => (a.pos || 0) - (b.pos || 0));
+
 
   return (
     <BrowserRouter>
       <Routes>
+        
+        <Route path="/result" element={<RaceResultPage data={resultData} />} />
         <Route 
             path="/" 
             element={
@@ -1114,119 +1614,114 @@ export default function App() {
                             </p>
                           </div>
                         </div>
-                      ) : (
-                        riders.map((rider, index) => {
-                          const isLeader = index === 0;
-                          
-                          // Position border indicator styles
-                          const rowBorderClass = isLeader 
-                            ? "border-l-4 border-red-600 bg-zinc-900/40 hover:bg-zinc-800/60" 
-                            : "border-l-4 border-zinc-700 bg-zinc-900/10 hover:bg-zinc-800/50";
+                        ) : (
+                            sortedRiders.map((rider, index) => {
+                              // Guaranteed true ONLY for the first element in the array
+                              const isLeader = index === 0;
 
-                          const posTextStyle = isLeader 
-                            ? "text-3xl font-black italic text-red-600 font-mono tracking-tight" 
-                            : "text-2xl font-black italic text-zinc-400 font-mono tracking-tight";
+                              // Position border indicator styles
+                              const rowBorderClass = isLeader
+                                ? "border-l-4 border-red-600 bg-zinc-900/40 hover:bg-zinc-800/60"
+                                : "border-l-4 border-zinc-700 bg-zinc-900/10 hover:bg-zinc-800/50";
 
-                          // Highlight flashes on overtake swap events
-                          const isRecentlyChanged = rider.changeTime && (Date.now() - rider.changeTime < 1300);
-                          const flashClass = isRecentlyChanged
-                            ? rider.changeDirection === 'up'
-                              ? 'bg-emerald-950/60 border-l-emerald-500 transition-all duration-300'
-                              : rider.changeDirection === 'down'
-                                ? 'bg-red-950/60 border-l-red-500 transition-all duration-300'
-                                : ''
-                            : '';
+                              const posTextStyle = isLeader
+                                ? "text-3xl font-black italic text-red-600 font-mono tracking-tight"
+                                : "text-2xl font-black italic text-zinc-400 font-mono tracking-tight";
 
-                          return (
-                            <motion.div
-                              layoutId={`rider-row-${rider.id}`}
-                              key={rider.id}
-                              className={`grid grid-cols-12 items-center py-4 px-6 my-2.5 rounded-r-lg border-y border-r border-transparent transition-all duration-500 cursor-pointer ${
-                                selectedRiderId === rider.id 
-                                  ? 'bg-zinc-850 border-zinc-700 shadow-2xl' 
-                                  : rowBorderClass
-                              } ${flashClass}`}
-                              id={`rider-row-${rider.id}`}
-                              onClick={() => {
-                                setSelectedRiderId(rider.id === selectedRiderId ? null : rider.id);
-                                setIsSetupOpen(true); // open setup pane to modify/inspect selected rider
-                                playBeep('tick');
-                              }}
-                            >
-                              {/* POSITION */}
-                              <div className="col-span-2 sm:col-span-1 flex items-center justify-self-end gap-3 padding-inline-end pe-4">
-                                {/* Delta arrows */}
-                                <div className="hidden sm:block">
-                                  {rider.changeDirection === 'up' && (
-                                    <ChevronUp className="w-4 h-4 text-emerald-500" />
-                                  )}
-                                  {rider.changeDirection === 'down' && (
-                                    <ChevronDown className="w-4 h-4 text-red-500" />
-                                  )}
-                                  {(!rider.changeDirection && rider.if === true) && (
-                                    <span className="text-zinc-650 text-3xl font-bold">🏁</span>
-                                  )}
-                                  {(!rider.changeDirection && rider.if === false) && (
-                                    <span className="text-zinc-650 text-3xl font-bold">-</span>
-                                  )}
-                                  {(rider.changeDirection === 'steady' && rider.if === false) && (
-                                    <span className="text-zinc-650 text-3xl font-bold">-</span>
-                                  )}
-                                  {(rider.changeDirection === 'steady' && rider.if === true) && (
-                                    <span className="text-zinc-650 text-3xl font-bold">🏁</span>
-                                  )}
-                                </div>
-                                <span className={posTextStyle} id={`rider-pos-${rider.id}`}>
-                                  {(index + 1).toString().padStart(2, '0')}
-                                </span>
-                              </div>
+                              // Flash highlighting on position changes
+                              const isRecentlyChanged = rider.changeTime && (Date.now() - rider.changeTime < 1300);
+                              const flashClass = isRecentlyChanged
+                                ? rider.changeDirection === 'up'
+                                  ? 'bg-emerald-950/60 border-l-emerald-500 transition-all duration-300'
+                                  : rider.changeDirection === 'down'
+                                    ? 'bg-red-950/60 border-l-red-500 transition-all duration-300'
+                                    : ''
+                                : '';
 
-                              {/* VEHICLE NO */}
-                              <div className="col-span-2 sm:col-span-1 text-center">
-                                <span className="text-3xl font-black italic tracking-tighter text-zinc-100 select-none font-sans">
-                                  {rider.no}
-                                </span>
-                              </div>
+                              const isSelected = selectedRiderId === rider.id;
 
-                              {/* RIDER NAME / TEAM */}
-                              <div className="col-span-5 sm:col-span-6 pl-4">
-                                <div className="flex flex-col">
-                                  <div className="flex items-center gap-2.5">
-                                    <span className="text-lg md:text-xl font-black uppercase tracking-tight text-zinc-100 leading-none">
-                                      {rider.nam}
+                              return (
+                                <motion.div
+                                  key={rider.id}
+                                  layoutId={`rider-row-${rider.id}`}
+                                  className={`grid grid-cols-12 items-center py-4 px-6 my-2.5 rounded-r-lg border-y border-r border-transparent transition-all duration-500 cursor-pointer ${
+                                    isSelected ? 'bg-zinc-850 border-zinc-700 shadow-2xl' : rowBorderClass
+                                  } ${flashClass}`}
+                                  id={`rider-row-${rider.id}`}
+                                  onClick={() => {
+                                    setSelectedRiderId(isSelected ? null : rider.id);
+                                    setIsSetupOpen(true);
+                                    playBeep('tick');
+                                  }}
+                                >
+                                  {/* POSITION & DELTA */}
+                                  <div className="col-span-2 sm:col-span-1 flex items-center justify-self-end gap-3 pe-4">
+                                    <div className="hidden sm:block">
+                                      {rider.changeDirection === 'up' && (
+                                        <ChevronUp className="w-4 h-4 text-emerald-500" />
+                                      )}
+                                      {rider.changeDirection === 'down' && (
+                                        <ChevronDown className="w-4 h-4 text-red-500" />
+                                      )}
+                                      {(!rider.changeDirection || rider.changeDirection === 'steady') && (
+                                        <span className="text-zinc-650 text-3xl font-bold">
+                                          {rider.if ? '🏁' : '-'}
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <span className={posTextStyle} id={`rider-pos-${rider.id}`}>
+                                      {(index + 1).toString().padStart(2, '0')}
                                     </span>
-                                    
-                                    {rider.ibt && (
-                                      <span className="text-[8px] bg-purple-950 text-purple-300 font-extrabold px-1.5 py-0.5 rounded border border-purple-600/40 flex items-center gap-0.5 uppercase tracking-wider leading-none">
-                                        <Sparkles className="w-2.5 h-2.5 shrink-0" /> RECORD
-                                      </span>
-                                    )}
                                   </div>
-                                  {rider.cb && (
-                                    <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mt-1.5 leading-none truncate font-sans">
-                                      {rider.cb}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
 
-                              {/* BEST & LAST TIMINGS */}
-                              <div className="col-span-3 text-right flex flex-col justify-center">
-                                <div className="font-mono text-lg md:text-xl font-black text-zinc-100 tracking-tight leading-none">
-                                  {rider.btTm || "--:--.---"}
-                                </div>
-                                <div className="text-[10px] text-zinc-500 font-mono mt-1.5 leading-none uppercase tracking-wider flex items-center justify-end gap-1">
-                                  <span className="font-bold">LST:</span> {rider.lsTm || "--:--.---"}
-                                  {rider.ls !== undefined && (
-                                    <span className="text-zinc-650 bg-zinc-950 px-1 py-0.2 rounded font-normal text-[8px] border border-zinc-850 ml-1">L.{rider.ls}</span>
-                                  )}
-                                </div>
-                              </div>
+                                  {/* VEHICLE NO */}
+                                  <div className="col-span-2 sm:col-span-1 text-center">
+                                    <span className="text-3xl font-black italic tracking-tighter text-zinc-100 select-none font-sans">
+                                      {rider.no}
+                                    </span>
+                                  </div>
 
-                            </motion.div>
-                          );
-                        })
-                      )}
+                                  {/* RIDER NAME / TEAM */}
+                                  <div className="col-span-5 sm:col-span-6 pl-4">
+                                    <div className="flex flex-col">
+                                      <div className="flex items-center gap-2.5">
+                                        <span className="text-lg md:text-xl font-black uppercase tracking-tight text-zinc-100 leading-none">
+                                          {rider.nam}
+                                        </span>
+                                        
+                                        {rider.ibt && (
+                                          <span className="text-[8px] bg-purple-950 text-purple-300 font-extrabold px-1.5 py-0.5 rounded border border-purple-600/40 flex items-center gap-0.5 uppercase tracking-wider leading-none">
+                                            <Sparkles className="w-2.5 h-2.5 shrink-0" /> RECORD
+                                          </span>
+                                        )}
+                                      </div>
+                                      {rider.cb && (
+                                        <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mt-1.5 leading-none truncate font-sans">
+                                          {rider.cb}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* BEST & LAST TIMINGS */}
+                                  <div className="col-span-3 text-right flex flex-col justify-center">
+                                    <div className="font-mono text-lg md:text-xl font-black text-zinc-100 tracking-tight leading-none">
+                                      {rider.btTm || "--:--.---"}
+                                    </div>
+                                    <div className="text-[10px] text-zinc-500 font-mono mt-1.5 leading-none uppercase tracking-wider flex items-center justify-end gap-1">
+                                      <span className="font-bold">LST:</span> {rider.lsTm || "--:--.---"}
+                                      {rider.ls !== undefined && (
+                                        <span className="text-zinc-650 bg-zinc-950 px-1 py-0.2 rounded font-normal text-[8px] border border-zinc-850 ml-1">
+                                          L.{rider.ls}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </motion.div>
+                              );
+                            })
+                        )}
                     </AnimatePresence>
                   </div>
 
@@ -1290,7 +1785,7 @@ export default function App() {
                             value={speedhiveUrl}
                             onChange={(e) => setSpeedhiveUrl(e.target.value)}
                             placeholder="Paste Speedhive session URL here..."
-                            className="w-full h-20 bg-zinc-950 border border-zinc-800 p-3 rounded text-xs font-mono text-zinc-300 focus:outline-none focus:border-red-600 leading-relaxed"
+                            className="w-full h-20 bg-zinc-500 border border-zinc-800 p-3 rounded text-xs font-mono text-zinc-300 focus:outline-none focus:border-red-600 leading-relaxed"
                           />
                           <div className="text-[9px] text-zinc-500 font-mono leading-relaxed bg-zinc-950 p-2.5 rounded border border-zinc-850">
                             <strong>Supported Format Example:</strong><br />
@@ -1719,24 +2214,129 @@ export default function App() {
         <Route 
             path="/control" 
             element={
-          <DisplayController socket={connectionRef.current} connectionStatus={connectionStatus} />
+          <DisplayController socket={connectionRef.current} connectionStatus={connectionStatus} syncState={control} inputVideo={controlVideoStatus} errorMessage={errorMessageControl} inputDevices={inputDevicesOption} passSpeedHiveUrl={handleSpeedHiveUrl}/>
         } />
         <Route 
             path="/sidePosition" 
             element={
-          <div className={`${control.laps ? 'w-[600px]' : 'w-[400px]'} transition-transform duration-300 ease-in-out min-h-screen text-zinc-100 font-sans flex flex-col selection:bg-red-600 selection:text-white relative overflow-x-hidden`} id="main-container">
-            {/* DETAILED TRACK CONSOLE - TAKE 100% ENTIRE PAGE DISPLAY */}
-            <main className="flex-1 max-w-7xl w-full mx-auto p-6 flex flex-col gap-6 relative z-10 animate-fade-in" id="main-content">
+          <div className={`mt-2 w-full min-h-screen text-zinc-100 font-sans flex flex-col relative overflow-x-hidden`} id="main-container">
+            <div className='ml-2 flex flex-row w-fit h-[73px]'>
+              <div className='p-3 bg-blue-800 flex flex-row'>
+                <div className='w-[100px] logoYcr'></div>
+
+                <div className='flex flex-col w-fit gap-2'>
+                  <div className="flex items-center gap-2">
+                    <span className="text-md font-bold text-zinc-300 uppercase tracking-widest leading-none">
+                      {sessionName || 'Motorsports timing board'}
+                    </span>
+                  </div>
+                  <h1 className="text-xl font-black italic tracking-tighter uppercase text-zinc-100 leading-tight">
+                    {raceTitle} <span className="text-zinc-300 font-normal">/ {groupName || 'No active session'}</span>
+                  </h1>
+                </div>
               
+              </div>
+                {showBanner && (
+                  <div className="w-fit flex gap-2 h-full bg-blue-950/95 p-4">
+                    <div className='mt-auto w-fit flex gap-2 h-min'>
+                      {(control.laps && !control.ltg) && (
+                        <div className="text-3xl font-bold italic text-zinc-200 font-sans leading-none">
+                          {laps} <span className="text-lg text-zinc-300 font-normal">LAPS</span>
+                        </div>
+                      )}
+                      {(control.laps && control.ltg && flag !== 3) && (
+                      <div className="h-min">
+                        <div className="text-3xl font-bold text-zinc-200 font-sans leading-none">
+                          <span className="text-2xl text-zinc-300 font-normal mr-3">LAP</span>{laps}
+                        <span className='text-3xl text-zinc-600'> / </span>
+                        
+                          {(flag === 3) ? ' Finished' : raceLaps ? raceLaps : lapsToGo ? `${lapsToGo}` : '' } {(flag !== 3 && !raceLaps && lapsToGo) && (<span className="text-3xl text-zinc-500 font-normal">Laps to go</span>)}
+                        </div>
+                      </div>)}
+                      {(!control.laps && control.ltg || flag === 3) && (
+                      <div className="h-min">
+                        <div className="text-3xl font-bold italic text-zinc-200 font-sans leading-none">
+                          {(flag === 3) ? 'Finished' : lapsToGo } {flag !== 3 && (<span className="text-lg text-zinc-500 font-normal">Laps to go</span>)}
+                        </div>
+                      </div>
+                      )}
+                    </div>
+                  </div>  
+                )}
+            </div>
+            <div className='flex flex-col bg-zinc-900 w-fit p-3 ml-2 gap-2'>
+              <div className="text-3xl font-mono text-white flex items-center gap-1">
+                {formatRaceTimer(raceSeconds)}
+              </div>
+            </div>
+            {/* DETAILED TRACK CONSOLE - TAKE 100% ENTIRE PAGE DISPLAY */}
+            <main className="flex-1 max-w-7xl w-full mx-0 p-1 flex flex-col relative z-10 animate-fade-in" id="main-content">
+              <div className={`${control.video ? useWebcam ? videoStatus === "connected" ? "" : "hidden" : "hidden" : 'hidden'} ml-1 w-[400px] bg-slate-950 rounded-t-lg overflow-hidden border border-slate-800 shadow-2xl font-sans`}>
+                {/* Stream Header */}
+                <div className="hidden flex items-center justify-between px-3 py-1.5 bg-slate-900 border-b border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2.5 w-2.5">
+                      {videoStatus === 'connected' && (
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                      )}
+                      <span
+                        className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                          videoStatus === 'connected'
+                            ? 'bg-red-600'
+                            : status === 'connecting'
+                            ? 'bg-amber-500 animate-pulse'
+                            : 'bg-slate-600'
+                        }`}
+                      />
+                    </span>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                      {stream}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded uppercase">
+                    {videoStatus}
+                  </span>
+                </div>
+
+                {/* 400px Video Viewport (16:9 Aspect Ratio) */}
+                <div className="relative aspect-video w-full flex items-center justify-center">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+
+                  {/* Status Overlays */}
+                  {videoStatus !== 'connected' &&(
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/90 p-4 text-center">
+                      {status === 'connecting' && (
+                        <p className="text-xs font-mono text-slate-400 animate-pulse">
+                          CONNECTING...
+                        </p>
+                      )}
+                      {videoStatus === 'error' && (
+                        <div className="space-y-1">
+                          <p className="text-xs font-semibold text-red-400">SIGNAL LOST</p>
+                          <p className="text-[10px] font-mono text-slate-500 max-w-[300px] truncate">
+                            {errorMessage}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
               {/* LEADERBOARD VIEW PORT - 100% WIDTH FOR MAXIMUM SPACING AND CLEAN LOOK */}
               <section className="w-full flex flex-col gap-4" id="leaderboard-section">
 
                   {/* REORDERING LIST WITH SPRING LAYOUT ANIMATIONS */}
-                  <div className="divide-y divide-zinc-950 p-3 min-h-[550px] relative" id="riders-reordering-list">
+                  <div className="divide-y divide-zinc-950w-full min-h-[550px] relative" id="riders-reordering-list">
                     <AnimatePresence initial={false}>
                       {riders.length === 0 ? (
-                        <div className="text-zinc-500 flex flex-col gap-4 animate-fade-in">
-                          <Diamond className="w-12 h-12 text-zinc-700 animate-pulse" />
+                        <div className="text-zinc-100 flex flex-col gap-4 animate-fade-in animate-pulse">
+                          -
                         </div>
                       ) : (
                         riders.map((rider, index) => {
@@ -1747,7 +2347,7 @@ export default function App() {
                             }
                           }
                           const isLeader = index === 0;
-                          
+
                           // Position border indicator styles
                           const rowBorderClass = isLeader 
                             ? "border-l-4 border-red-600 bg-zinc-900/79" 
@@ -1761,9 +2361,9 @@ export default function App() {
                           const isRecentlyChanged = rider.changeTime && (Date.now() - rider.changeTime < 1300);
                           const flashClass = isRecentlyChanged
                             ? rider.changeDirection === 'up'
-                              ? 'bg-emerald-950/60 border-l-emerald-500 transition-all duration-300'
+                              ? 'border-l-emerald-500'
                               : rider.changeDirection === 'down'
-                                ? 'bg-red-950/60 border-l-red-500 transition-all duration-300'
+                                ? 'border-l-red-500'
                                 : ''
                             : '';
                             const posState = isRecentlyChanged
@@ -1778,7 +2378,7 @@ export default function App() {
                             <motion.div
                               layoutId={`rider-row-${rider.id}`}
                               key={rider.id}
-                              className={`${showUI.diff ? 'mt-8 ' : ''}my-1 ${control.laps ? '' : ''} w-min-screen gap-2.5 flex items-center flex-row border-transparent pointer border-l-4 ${flashClass}`}
+                              className={`${showUI.diff ? 'mt-8 ' : ''}my-1 ${control.laps ? '' : ''} w-full flex items-center flex-row border-transparent pointer border-l-4 ${flashClass}`}
                               id={`rider-row-${rider.id}`}
                               onClick={() => {
                                 setSelectedRiderId(rider.id === selectedRiderId ? null : rider.id);
@@ -1786,18 +2386,26 @@ export default function App() {
                                 playBeep('tick');
                               }}
                             >
-                              <div className={`flex items-center ${control.time ? 'grid-cols-11' : 'grid-cols-8'} w-[700px] h-full grid border-zinc-700 bg-zinc-950/90 transition-all duration-300`}>
+                              <div key={`rider-${rider.id}`} className={`flex items-center grid-cols-8 w-[400px] h-full grid border-zinc-700 bg-zinc-950/90`}>
                                 {/* POSITION */}
-                                <div className="col-span-1 flex items-center justify-center gap-1">
-                                  <span className="text-zinc-100 text-xl font-bold font-mono" id={`rider-pos-${rider.id}`}>
-                                    {rider.if === true ? "🏁" : `${index + 1}`}
-                                  </span>
-                                  {rider.changeDirection === 'up' && (
-                                    <ChevronUp className="w-4 h-4 text-emerald-500 shrink-0" />
-                                  )}
-                                  {rider.changeDirection === 'down' && (
-                                    <ChevronDown className="w-4 h-4 text-red-500 shrink-0" />
-                                  )}
+                                <div className="col-span-1 flex items-center justify-center">
+                                  {/* Delta arrows */}
+                                  <div className="">
+                                    {rider.changeDirection === 'up' && (
+                                      <ChevronUp className="w-4 h-4 text-emerald-500" />
+                                    )}
+                                    {rider.changeDirection === 'down' && (
+                                      <ChevronDown className="w-4 h-4 text-red-500" />
+                                    )}
+                                    {(!rider.changeDirection || rider.changeDirection !== 'up' && rider.changeDirection !== 'down') && (
+                                      <span className="text-zinc-650 text-xl font-bold" id={`rider-pos-${rider.id}`}>
+                                    {`${rider.pos}`}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {/* <span className={`${posTextStyle}`} id={`rider-pos-${rider.id}`}>
+                                    {`${(index + 1).toString()}`}
+                                  </span> */}
                                 </div>
                                 
                                 {/* RIDER NAME / TEAM */}
@@ -1807,6 +2415,9 @@ export default function App() {
                                       <span className="text-lg font-black uppercase tracking-tight leading-none">
                                         {`${fitName(rider.nam, 8)}`}
                                       </span>
+                                    {(rider.changeDirection === 'steady' && rider.if === true) && (
+                                      <span className="text-zinc-650 text-3xl font-bold">🏁</span>
+                                    )}
                                       
                                       {/* {rider.ibt && (
                                         <span className="text-[8px] bg-purple-950 text-purple-300 font-extrabold px-1.5 py-0.5 rounded border border-purple-600/40 flex items-center gap-0.5 uppercase tracking-wider leading-none">
@@ -1824,18 +2435,19 @@ export default function App() {
 
                                 
                                 {/* VEHICLE NO */}
-                                <div className="col-span-2 my-1 rounded-lg bg-linear-to-r from-blue-700/40 to-blue-800/100 text-center">
+                                <div className="col-span-2 my-1 rounded-l-lg bg-linear-to-r from-blue-700/100 to-blue-700/70 text-center">
                                   <span className="text-xl italic tracking-tighter text-white select-none font-sans">
                                     {rider.no}
                                   </span>
-                                </div>        
-
-                                
-
+                                </div> 
+                              </div>
+                              
+                              <div className='flex flex-row'>
                                 {/* BEST & LAST TIMINGS */}
-                                <div className={`${control.time ? "" : "hidden"} col-span-3 text-right flex flex-col justify-center`}>
-                                  <div className="font-mono pr-2 text-lg font-black text-zinc-100 tracking-tight leading-none">
-                                    {isLeader ? (rider.lsTm || "--:--.---") : (rider.gp || rider.df || "--:--.---")}
+                                {(rider.df || rider.gp) && (
+                                <div className={`${control.time ? "" : "hidden"} w-[110px] text-right flex flex-col justify-center bg-zinc-950/90 border border-zinc-800 px-2 py-0.5 gap-1`}>
+                                  <div className="font-mono text-xl font-semibold text-zinc-100 tracking-tight leading-none">
+                                    {isLeader ? control.gap ? 'INTERVAL' : 'GAP'  : control.gap ? rider.gp : control.diff ? rider.df : rider.df ? rider.dfCl : "-"}
                                   </div>
                                   {/* <div className="text-[10px] text-zinc-500 font-mono mt-1.5 leading-none uppercase tracking-wider flex items-center justify-end gap-1">
                                     <span className="font-bold">BEST:</span> {rider.btTm || "--:--.---"}
@@ -1843,16 +2455,16 @@ export default function App() {
                                       <span className="text-zinc-650 bg-zinc-950 px-1 py-0.2 rounded font-normal text-[8px] border border-zinc-850 ml-1">laps{rider.ls}</span>
                                     )}
                                   </div> */}
-                                </div>
-                                
+                                </div>)}
+                                {rider.btTm && (
+                                <div className={`${control.best ? '' : 'hidden'} text-left flex flex-row text-lg font-black leading-none uppercase tracking-wider flex items-center justify-end gap-1 border-zinc-800 rounded px-2 bg-zinc-950/90 border border-zinc-800`}>
+                                  <span className="font-bold">BEST:</span> {rider.btTm}
+                                  {/* {rider.ls !== undefined && (
+                                    <span className="text-zinc-650 bg-zinc-950 px-1 py-0.2 rounded font-normal text-[8px] border border-zinc-850 ml-1">laps{rider.ls}</span>
+                                  )} */}
+                                </div>)}
                               </div>
                               
-                              <div className={`${control.laps ? '' : 'hidden'} text-left flex flex-row text-lg text-blue-400 font-black mt-1.5 leading-none uppercase tracking-wider flex items-center justify-end gap-1 border-zinc-800 rounded px-2 bg-zinc-400/50`}>
-                                <span className="font-bold">BEST:</span> {rider.btTm || "--:--.---"}
-                                {rider.ls !== undefined && (
-                                  <span className="text-zinc-650 bg-zinc-950 px-1 py-0.2 rounded font-normal text-[8px] border border-zinc-850 ml-1">laps{rider.ls}</span>
-                                )}
-                              </div>
                             </motion.div>
                           );
                         })
