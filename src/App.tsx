@@ -39,40 +39,17 @@ import {
   ChevronUp,
   ChevronDown
 } from 'lucide-react';
-import { RiderResult, SignalRPacket } from './types';
+import { RiderResult, SignalRPacket, ControlState, RaceEventData, RacerResult } from './types';
 import { INITIAL_RIDERS, recalculateGaps, parseLapTimeToMs, formatLapTime } from './data';
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { RaceResultPage } from './components/resultPage';
-import {DisplayController} from './components/control';
+import { DisplayController } from './components/control';
+import { SidePositionPage } from './components/SidePositionPage';
+import { MainBoardPage } from './components/MainBoardPage';
 
 import { ListSelectInput, SelectOption } from './components/lists';
 
-interface RacerResult {
-    id: string;
-    position: number;
-    riderNo: string | number;
-    riderName: string;
-    teamGroup: string;       // Racer's team or group (e.g. "Monster Energy Yamaha" or "Group A")
-    totalTime: string;      // Total race time or gap (e.g. "23:45.123" or "+1.234s")
-    bestLapTime: string;    // Best lap time (e.g. "1:28.452")
-    hasFastestLap?: boolean;// Flag for fastest lap record in the session
-    status?: 'FINISHED' | 'DNF' | 'DNS' | 'DSQ';
-}
-interface RaceEventData {
-    eventName: string;       // e.g. "GRAN PREMIO D'ITALIA OAKLEY"
-    groupName: string;       // e.g. "MOTOGP - RACE RESULTS" or "GROUP 1 - FINAL"
-    sessionDate: string;      // e.g. "2026-07-23"
-    circuitName: string;     // e.g. "Autodromo Internazionale del Mugello"
-    lapsCompleted: number;  // e.g. 23
-    racers: RacerResult[];
-}
-interface ControlState {
-  laps?: boolean;
-  time?: boolean;
-  input?: boolean;
-  rtmp?: boolean;
-  [key: string]: boolean | undefined; // Allows for any other dynamic boolean/keys you might send later
-}
+
 
 // Helper to parse Speedhive URLs or session IDs
 function parseSpeedhiveUrl(urlStr: string) {
@@ -598,6 +575,8 @@ export default function App() {
   const [newRiderNo, setNewRiderNo] = useState('');
   const [newRiderTeam, setNewRiderTeam] = useState('');
 
+  const [isConsoleOpen, setIsConsoleOpen] = useState<boolean>(false);
+
   // Micro-console logs array for setup page
   const [signalRLogs, setSignalRLogs] = useState<Array<{
     id: string;
@@ -709,14 +688,14 @@ export default function App() {
   }, [riders]);
 
   // Add websocket log entry
-  const addWebSocketLog = (direction: 'in' | 'system' | 'sent', message: string, payloadStr?: string) => {
+  const addWebSocketLog = (direction: 'in' | 'system' | 'sent' | 'ws' | 'packet' | 'sim', message: string, payloadStr?: string) => {
     setSignalRLogs((prev) => {
       const timestamp = new Date().toLocaleTimeString();
       return [
         {
           id: `log-${Date.now()}-${Math.random()}`,
           timestamp,
-          direction,
+          direction: direction as 'in' | 'system' | 'sent',
           message,
           rawPayload: payloadStr
         },
@@ -724,6 +703,15 @@ export default function App() {
       ].slice(0, 35);
     });
   };
+
+  const webSocketLogs = useMemo(() => {
+    return signalRLogs.map((log) => ({
+      id: log.id,
+      time: log.timestamp,
+      type: (log.direction === 'in' ? 'packet' : log.direction === 'sent' ? 'ws' : log.direction) as 'ws' | 'packet' | 'system' | 'sim',
+      text: log.message,
+    }));
+  }, [signalRLogs]);
   const injectSignalRPacket = (packetObj: SignalRPacket) => {
     if (!packetObj || !Array.isArray(packetObj.results)) {
       addWebSocketLog('system', "❌ SignalR Error: results is not a valid array");
@@ -1423,11 +1411,84 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         
-        <Route path="/result" element={<RaceResultPage data={resultData} />} />
+        <Route
+          path="/result"
+          element={
+            <RaceResultPage
+              data={resultData}
+              riders={riders}
+              raceTitle={raceTitle}
+              groupName={groupName}
+              sessionName={sessionName}
+            />
+          }
+        />
         <Route 
             path="/" 
-            element={
-          <div className="min-h-screen text-zinc-100 font-sans flex flex-col bg-zinc-950 selection:bg-red-600 selection:text-white relative overflow-x-hidden" id="main-container">
+            element={<MainBoardPage
+              riders={riders}
+              sortedRiders={sortedRiders}
+              raceTitle={raceTitle}
+              sessionName={sessionName}
+              groupName={groupName}
+              connectionStatus={connectionStatus}
+              connectionError={connectionError}
+              raceSeconds={raceSeconds}
+              isTimerRunning={isTimerRunning}
+              triggerStopwatch={triggerStopwatch}
+              raceLaps={raceLaps || 12}
+              setRaceLaps={setRaceLaps}
+              isClosedLoop={isClosedLoop}
+              setIsClosedLoop={setIsClosedLoop}
+              sessionBestTime={sessionBestTime}
+              sessionBestRider={sessionBestRider}
+              laps={laps}
+              lapsToGo={lapsToGo}
+              flag={flag}
+              latestAnnouncement={latestAnnouncement}
+              soundEnabled={soundEnabled}
+              setSoundEnabled={setSoundEnabled}
+              selectedRiderId={selectedRiderId}
+              setSelectedRiderId={setSelectedRiderId}
+              isSetupOpen={isSetupOpen}
+              setIsSetupOpen={setIsSetupOpen}
+              speedhiveUrl={speedhiveUrl || ''}
+              setSpeedhiveUrl={setSpeedhiveUrl}
+              handleLoadSpeedhiveSession={handleLoadSpeedhiveSession}
+              setRiders={setRiders}
+              setRaceTitle={setRaceTitle}
+              setSessionName={setSessionName}
+              setGroupName={setGroupName}
+              setFlag={setFlag}
+              setLatestAnnouncement={setLatestAnnouncement}
+              setConnectionStatus={setConnectionStatus}
+              addWebSocketLog={addWebSocketLog}
+              autoSimulate={autoSimulate}
+              setAutoSimulate={setAutoSimulate}
+              simSpeedSeconds={simSpeedSeconds}
+              setSimSpeedSeconds={setSimSpeedSeconds}
+              triggerManualOvertake={triggerManualOvertake}
+              handleResetTiming={handleResetTiming}
+              isEditingGrid={isEditingGrid}
+              setIsEditingGrid={setIsEditingGrid}
+              handleAddRider={handleAddRider}
+              newRiderName={newRiderName}
+              setNewRiderName={setNewRiderName}
+              newRiderNo={newRiderNo}
+              setNewRiderNo={setNewRiderNo}
+              newRiderTeam={newRiderTeam}
+              setNewRiderTeam={setNewRiderTeam}
+              editingRider={editingRider}
+              setEditingRider={setEditingRider}
+              handleUpdateRiderSpecs={handleUpdateRiderSpecs}
+              handleDeleteRider={handleDeleteRider}
+              isConsoleOpen={isConsoleOpen}
+              setIsConsoleOpen={setIsConsoleOpen}
+              webSocketLogs={webSocketLogs}
+              playBeep={playBeep}
+            />}
+        />
+        {false ? <Route path="/old-main" element={<div className="min-h-screen text-zinc-100 font-sans flex flex-col bg-zinc-950 selection:bg-red-600 selection:text-white relative overflow-x-hidden" id="main-container">
             
             {/* Background Decoratives */}
             <div className="absolute top-0 right-0 w-1/3 h-full opacity-5 pointer-events-none overflow-hidden z-0">
@@ -2209,8 +2270,7 @@ export default function App() {
               </div>
             </footer>
 
-          </div>} 
-        />
+          </div>} /> : null}
         <Route 
             path="/control" 
             element={
@@ -2219,7 +2279,32 @@ export default function App() {
         <Route 
             path="/sidePosition" 
             element={
-          <div className={`mt-2 w-full min-h-screen text-zinc-100 font-sans flex flex-col relative overflow-x-hidden`} id="main-container">
+              <SidePositionPage
+                riders={riders}
+                sessionName={sessionName}
+                raceTitle={raceTitle}
+                groupName={groupName}
+                showBanner={showBanner}
+                control={control}
+                raceLaps={raceLaps}
+                laps={laps}
+                lapsToGo={lapsToGo}
+                flag={flag}
+                raceSeconds={raceSeconds}
+                stream={stream}
+                useWebcam={useWebcam}
+                inputDevice={inputDevice}
+                videoStatus={videoStatus}
+                errorMessage={errorMessage}
+                selectedRiderId={selectedRiderId}
+                setSelectedRiderId={setSelectedRiderId}
+                setIsSetupOpen={setIsSetupOpen}
+                playBeep={playBeep}
+                socket={connectionRef.current}
+              />
+            }
+        />
+        {false ? <Route path="/old-side" element={<div className={`mt-2 w-full min-h-screen text-zinc-100 font-sans flex flex-col relative overflow-x-hidden`} id="main-container">
             <div className='ml-2 flex flex-row w-fit h-[73px]'>
               <div className='p-3 bg-blue-800 flex flex-row'>
                 <div className='w-[100px] logoYcr'></div>
@@ -2474,8 +2559,7 @@ export default function App() {
               </section>
 
             </main>
-          </div>} 
-        />
+          </div>} /> : null}
         <Route 
           path="/sideposition" 
           element={<Navigate to="/sidePosition" replace />} 

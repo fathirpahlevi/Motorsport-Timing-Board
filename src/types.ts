@@ -3,6 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+export interface SignalRPacket {
+  target: string;
+  arguments: any[];
+  results?: any[];
+}
+
 export interface RiderResult {
   sesId: string;
   eId: string;
@@ -40,7 +46,37 @@ export interface RiderResult {
   lapStatus?: 'improved' | 'personal-best' | 'none'; // Lap status indicator
 }
 
-export interface SignalRPacket {
-  type: number;
-  results: RiderResult[];
+export interface RacerResult {
+    id: string;
+    position: number;
+    riderNo: string | number;
+    riderName: string;
+    teamGroup: string;       // Racer's team or group (e.g. "Monster Energy Yamaha" or "Group A")
+    totalTime: string;      // Total race time or gap (e.g. "23:45.123" or "+1.234s")
+    bestLapTime: string;    // Best lap time (e.g. "1:28.452")
+    hasFastestLap?: boolean;// Flag for fastest lap record in the session
+    status?: 'FINISHED' | 'DNF' | 'DNS' | 'DSQ';
 }
+
+export interface RaceEventData {
+    eventName: string;       // e.g. "GRAN PREMIO D'ITALIA OAKLEY"
+    groupName: string;       // e.g. "MOTOGP - RACE RESULTS" or "GROUP 1 - FINAL"
+    sessionDate: string;      // e.g. "2026-07-23"
+    circuitName: string;     // e.g. "Autodromo Internazionale del Mugello"
+    lapsCompleted: number;  // e.g. 23
+    racers: RacerResult[];
+}
+
+export interface ControlState {
+  laps?: boolean;
+  time?: boolean;
+  input?: boolean;
+  rtmp?: boolean;
+  best?: boolean;
+  gap?: boolean;
+  diff?: boolean;
+  ltg?: boolean;
+  video?: boolean;
+  [key: string]: boolean | undefined;
+}
+

@@ -1,8 +1,5 @@
-import { input } from 'motion/react-client';
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ListSelectInput, SelectOption } from './lists';
-import { StringList } from '@google/genai';
-import { create } from 'domain';
 
 // Define the shape of the props the component expects
 interface SyncState {
