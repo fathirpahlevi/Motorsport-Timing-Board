@@ -20,7 +20,10 @@ let raceState = {
   stats: null as any,
   controlAction: {},
   isTimerRunning: false,
-  raceSeconds: 0
+  raceSeconds: 0,
+  isManualMode: false,
+  manualRiders: [] as any[],
+  manualSessionInfo: null as any,
 };
 const allClients = new Set<WSClient>();
 
@@ -341,6 +344,26 @@ async function startServer() {
         }
         else if (message.type === 'syncState'){
           sendToClient(ws, { type: "syncState", raceState });
+          if (raceState.isManualMode) {
+            sendToClient(ws, {
+              type: "manualDataSync",
+              isManualMode: raceState.isManualMode,
+              riders: raceState.manualRiders,
+              sessionInfo: raceState.manualSessionInfo
+            });
+          }
+        }
+        else if (message.type === 'manualDataSync') {
+          raceState.isManualMode = !!message.isManualMode;
+          if (message.riders) raceState.manualRiders = message.riders;
+          if (message.sessionInfo) raceState.manualSessionInfo = message.sessionInfo;
+          console.log(`[WS Server] Manual Mode Sync: enabled=${raceState.isManualMode}, riders=${raceState.manualRiders.length}`);
+          broadcastToAll({
+            type: "manualDataSync",
+            isManualMode: raceState.isManualMode,
+            riders: raceState.manualRiders,
+            sessionInfo: raceState.manualSessionInfo
+          });
         }
         else if (message.type === 'videoStatus'){
           broadcastToAll({type:"videoStatus", status:message.status});

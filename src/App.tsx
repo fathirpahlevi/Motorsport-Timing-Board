@@ -49,6 +49,7 @@ import { SidePositionPage } from './components/SidePositionPage';
 import { MainBoardPage } from './components/MainBoardPage';
 import { StartingGrid } from './components/startingGrid';
 import { WebRTCVideoPlayer } from './components/rtmpVideo';
+import { ManualPage } from './components/ManualPage';
 
 import { ListSelectInput, SelectOption } from './components/lists';
 
@@ -245,6 +246,12 @@ export default function App() {
   const [latestAnnouncement, setLatestAnnouncement] = useState<string>('');
 
   // Active Riders / Telemetry grid
+  const [isManualMode, setIsManualMode] = useState<boolean>(false);
+  const isManualModeRef = useRef<boolean>(false);
+  useEffect(() => {
+    isManualModeRef.current = isManualMode;
+  }, [isManualMode]);
+
   const [riders, setRiders] = useState<RiderResult[]>(() => {
     return recalculateGaps(INITIAL_RIDERS);
   });
@@ -420,6 +427,7 @@ export default function App() {
   }, [signalRLogs]);
   
   const injectSignalRPacket = (packetObj: SignalRPacket) => {
+    if (isManualModeRef.current) return; // Ignore Speedhive live updates when manual mode is active
     if (!packetObj || !Array.isArray(packetObj.results)) {
       addWebSocketLog('system', "❌ SignalR Error: results is not a valid array");
       return;
@@ -762,6 +770,21 @@ export default function App() {
               setConnectionError(message.message || 'Subscription failed');
               addWebSocketLog('system', `❌ Subscription Error: ${message.message}`);
             }
+          } else if (message.type === "manualDataSync") {
+            addWebSocketLog('system', `⚙️ Manual Mode Sync received: enabled=${message.isManualMode}`);
+            setIsManualMode(!!message.isManualMode);
+            if (message.riders && Array.isArray(message.riders)) {
+              setRiders(message.riders);
+            }
+            if (message.sessionInfo) {
+              if (typeof message.sessionInfo.raceTitle === 'string') setRaceTitle(message.sessionInfo.raceTitle);
+              if (typeof message.sessionInfo.sessionName === 'string') setSessionName(message.sessionInfo.sessionName);
+              if (typeof message.sessionInfo.groupName === 'string') setGroupName(message.sessionInfo.groupName);
+              if (typeof message.sessionInfo.raceLaps === 'number') setRaceLaps(message.sessionInfo.raceLaps);
+              if (typeof message.sessionInfo.laps === 'number') setLaps(message.sessionInfo.laps);
+              if (typeof message.sessionInfo.lapsToGo === 'number') setLapsToGo(message.sessionInfo.lapsToGo);
+              if (typeof message.sessionInfo.flag === 'number') setFlag(message.sessionInfo.flag);
+            }
           } else if (message.type === "resultsForSessionReceived") {
             addWebSocketLog('in', `📥 resultsForSessionReceived websocket frame parsed`);
             const data = message.data;
@@ -771,7 +794,7 @@ export default function App() {
           } else if (message.type === "sessionAddedOrUpdated") {
             addWebSocketLog('in', `🔔 Feed event: sessionAddedOrUpdated`);
             const data = message.data;
-            if (data) {
+            if (data && !isManualModeRef.current) {
               if (data.eNam) setRaceTitle(data.eNam);
               if (data.rnNam) setSessionName(data.rnNam);
               if (data.gNam) setGroupName(data.gNam);
@@ -1168,6 +1191,33 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         
+        <Route
+          path="/manual"
+          element={
+            <ManualPage
+              riders={riders}
+              setRiders={setRiders}
+              isManualMode={isManualMode}
+              setIsManualMode={setIsManualMode}
+              raceTitle={raceTitle}
+              setRaceTitle={setRaceTitle}
+              sessionName={sessionName}
+              setSessionName={setSessionName}
+              groupName={groupName}
+              setGroupName={setGroupName}
+              raceLaps={raceLaps}
+              setRaceLaps={setRaceLaps}
+              laps={laps}
+              setLaps={setLaps}
+              lapsToGo={lapsToGo}
+              setLapsToGo={setLapsToGo}
+              flag={flag}
+              setFlag={setFlag}
+              socket={connectionRef.current}
+              addWebSocketLog={addWebSocketLog}
+            />
+          }
+        />
         <Route
           path="/trophy"
           element={
