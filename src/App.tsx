@@ -43,9 +43,13 @@ import { RiderResult, SignalRPacket, ControlState, RaceEventData, RacerResult } 
 import { INITIAL_RIDERS, recalculateGaps, parseLapTimeToMs, formatLapTime } from './data';
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { RaceResultPage } from './components/resultPage';
+import { TrophyPage } from './components/trophyPage';
 import { DisplayController } from './components/control';
 import { SidePositionPage } from './components/SidePositionPage';
 import { MainBoardPage } from './components/MainBoardPage';
+import { StartingGrid } from './components/startingGrid';
+import { WebRTCVideoPlayer } from './components/rtmpVideo';
+import { ManualPage } from './components/ManualPage';
 
 import { ListSelectInput, SelectOption } from './components/lists';
 
@@ -118,15 +122,20 @@ function fitName(name: string, maxLength: number) {
 export default function App() {
   const [speedhiveUrl, setSpeedhiveUrl] = useState<string>();
   const resultData = useRef<RaceEventData>;
-  const [raceLaps, setRaceLaps] = useState<number>();
+  const [raceLaps, setRaceLaps] = useState<number>(0);
   const [isClosedLoop, setIsClosedLoop] = useState<boolean>(() => {
     return localStorage.getItem('is_closed_loop') !== 'false';
   });
   const [showLTG, setShowLTG] = useState<boolean>(false);
   const [showLaps, setShowLaps] = useState<boolean>(false);
   const [showBanner, setShowBanner] = useState<boolean>(true);
+  
+  const [customBanner, setCustomBanner] = useState<string>('');
 
-  const [stream, setStream] = useState<string>('http://localhost:8889/live/iPhone/');
+  const [finishedRacerPage, setfinishedRacerPage] = useState<number>(0);
+  const [finishedPages, setFinishedPages] = useState<number>(0);
+
+  const [stream, setStream] = useState<string>('');
   const [useWebcam, setUseWebcam] = useState<boolean>(true);
   const [inputDevice, setInputDevice] = useState<string>('');
   const inputDeviceRef = useRef('');
@@ -134,133 +143,6 @@ export default function App() {
   
   const [inputDevices,setInputDevices] = useState<SelectOption[]>([]);
   const [inputDevicesOption,setInputDevicesOption] = useState<SelectOption[]>([]);
-  // 1. Move device fetching inside a useEffect
-  useEffect(() => {
-    // Only query devices if we are on the /sideposition route
-    console.log("RUNS ON location.pathname useeffect:", location.pathname);
-    if (location.pathname !== '/sideposition') return;
-
-    let isMounted = true;
-
-    const getVideoInput = async () => {
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoInputDevices = devices
-          .filter((device) => device.kind === 'videoinput')
-          .map((device) => ({
-            value: device.deviceId,
-            label: device.label || 'Video Input',
-          }));
-
-        if (isMounted) {
-          setInputDevices(videoInputDevices);
-        }
-      } catch (err: any) {
-        console.error('Failed to enumerate devices:', err);
-      }
-    };
-
-    getVideoInput();
-
-    // Listen for device changes (e.g. user plugs/unplugs a USB camera)
-    navigator.mediaDevices.addEventListener('devicechange', getVideoInput);
-
-    return () => {
-      isMounted = false;
-      navigator.mediaDevices.removeEventListener('devicechange', getVideoInput);
-    };
-  }, [location.pathname]); // Re-runs if the user navigates to /sideposition
-
-
-  // 2. Your WebSocket sender useEffect stays clean
-  useEffect(() => {
-    const isWsOpen = connectionRef.current?.readyState === WebSocket.OPEN;
-    const isSidePosition = location.pathname === '/sideposition';
-    const hasDevicesChanged = inputDevices !== lastInputDevicesRef.current;
-    if (isSidePosition && isWsOpen && hasDevicesChanged) {
-    console.log("Sending websock");
-      connectionRef.current?.send(
-        JSON.stringify({
-          type: 'inputDevices',
-          devices: inputDevices,
-        })
-      );
-    }
-
-    lastInputDevicesRef.current = inputDevices;
-  }, [inputDevices, location.pathname]);
-  // }
-  useEffect(() => {
-    inputDeviceRef.current = inputDevice;
-
-    // 1. Explicitly stop stream if on /sideposition OR no input device selected
-    if (!inputDevice || location.pathname !== '/sideposition') {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
-      }
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
-      }
-      setVideoStatus('error');
-      setErrorMessage('Video disabled on this route');
-      return;
-    }
-
-    let isMounted = true;
-    setVideoStatus('connecting');
-    setErrorMessage('');
-
-    const startWebcam = async () => {
-      try {
-        const mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            deviceId: { exact: inputDevice }
-          },
-          audio: false
-        });
-
-        if (!isMounted) {
-          mediaStream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-
-        streamRef.current = mediaStream;
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = mediaStream;
-          await videoRef.current.play();
-          setVideoStatus('connected');
-        }
-      } catch (err: any) {
-        if (!isMounted) return;
-        console.error("Webcam access denied or failed:", err);
-        setVideoStatus('error');
-
-        const msg = err.name === 'NotAllowedError'
-          ? 'Camera permission denied by browser'
-          : err.name === 'NotFoundError'
-          ? 'No camera device found'
-          : 'Failed to access browser camera';
-
-        setErrorMessage(msg);
-        setControlVideoStatus(msg);
-      }
-    };
-
-    startWebcam();
-
-    // 2. Global cleanup on unmount or when dependencies change
-    return () => {
-      isMounted = false;
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
-      }
-    };
-}, [inputDevice, location.pathname]);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -269,221 +151,26 @@ export default function App() {
   const [controlVideoStatus, setControlVideoStatus] = useState<string>('connecting');
   const [errorMessageControl, setErrorMessageControl] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
-  useEffect(() => {
-    if(connectionRef.current && connectionRef.current.readyState === WebSocket.OPEN && location.pathname === '/sideposition'){
-      if(videoStatus){
-        connectionRef.current.send(JSON.stringify({
-            type: 'videoStatus',
-            status:videoStatus
-          }));
-      }
-      if(errorMessage){
-        connectionRef.current.send(JSON.stringify({
-            type: 'errorMessage',
-            error: errorMessage
-          }));
-      }
-    } 
-  }, [videoStatus,errorMessage]);
-
-  useEffect(() => {
-    if (!useWebcam || location.pathname !== '/sideposition' || !inputDeviceRef.current){
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
-      }
-      return;
-    }
-
-
-    let isMounted = true;
-    setVideoStatus('connecting');
-    setErrorMessage('');
-
-    const startWebcam = async () => {
-      try {
-        // 1. Request access to camera and microphone
-        const mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            deviceId: {
-              exact: inputDeviceRef.current,
-            }
-          },
-          audio: false // Set to true if you want webcam mic audio
-        });
-        
-        if (!isMounted) {
-          // If unmounted before permission granted, stop all tracks
-          mediaStream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-
-        streamRef.current = mediaStream;
-
-        // 2. Attach stream to HTML5 Video element
-        if (videoRef.current) {
-          videoRef.current.srcObject = mediaStream;
-          await videoRef.current.play();
-          setVideoStatus('connected');
-        }
-      } catch (err: any) {
-        if (!isMounted) return;
-        console.error("Webcam access denied or failed:", err);
-        setVideoStatus('error');
-
-        if (err.name === 'NotAllowedError') {
-          setErrorMessage('Camera permission denied by browser');
-          setControlVideoStatus('Camera permission denied by browser');
-        } else if (err.name === 'NotFoundError') {
-          setErrorMessage('No camera device found');
-          setControlVideoStatus('Camera permission denied by browser');
-        } else {
-          setErrorMessage('Failed to access browser camera');
-          setControlVideoStatus('Failed to access browser camera');
-        }
-      }
-    };
-
-    startWebcam();
-
-    // Cleanup: Turn off camera light/hardware when component unmounts
-    return () => {
-      isMounted = false;
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
-      }
-    };
-  }, [useWebcam]);
+  const [control, setControl] = useState<ControlState>({laps:false,ltg:false,input:false,rtmp:false});
+  const controlRef = useRef<Object>({});
   
-  // const videoRef = useRef<HTMLVideoElement | null>(null);
-  // const pcRef = useRef<RTCPeerConnection | null>(null);
-  // const [status, setStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
-  // const [errorMessage, setErrorMessage] = useState<string>('');
-
-  // useEffect(() => {
-  //   if (!stream) return;
+  useEffect(() => {
+    controlRef.current = control;
     
-  //   console.log("VIDEO URL:",stream);
-  //   let isMounted = true;
-  //   setStatus('connecting');
-  //   setErrorMessage('');
-
-  //   const connectWebRTC = async () => {
-  //     try {
-  //       // Clean up existing connection before creating a new one
-  //       if (pcRef.current) {
-  //         pcRef.current.close();
-  //       }
-
-  //       const pc = new RTCPeerConnection({
-  //         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-  //       });
-  //       pcRef.current = pc;
-
-  //       pc.addTransceiver('video', { direction: 'recvonly' });
-  //       pc.addTransceiver('audio', { direction: 'recvonly' });
-
-  //       pc.ontrack = (event) => {
-  //         if (videoRef.current && event.streams[0]) {
-  //           videoRef.current.srcObject = event.streams[0];
-  //           videoRef.current.play().catch(() => {
-  //             if (videoRef.current) {
-  //               videoRef.current.muted = true;
-  //               videoRef.current.play();
-  //             }
-  //           });
-  //         }
-  //       };
-
-  //       pc.onconnectionstatechange = () => {
-  //         if (!isMounted) return;
-  //         if (pc.connectionState === 'connected') {
-  //           setStatus('connected');
-  //         } else if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-  //           setStatus('error');
-  //           setErrorMessage('Stream connection lost');
-  //         }
-  //       };
-
-  //       const offer = await pc.createOffer();
-  //       await pc.setLocalDescription(offer);
-
-  //       // --- FIX 1: Wait for ICE Gathering ---
-  //       if (pc.iceGatheringState !== 'complete') {
-  //         await new Promise<void>((resolve) => {
-  //           const checkState = () => {
-  //             if (pc.iceGatheringState === 'complete') {
-  //               pc.removeEventListener('icegatheringstatechange', checkState);
-  //               resolve();
-  //             }
-  //           };
-  //           pc.addEventListener('icegatheringstatechange', checkState);
-  //           // Safety timeout in case STUN server hangs
-  //           setTimeout(resolve, 2000); 
-  //         });
-  //       }
-
-  //       if (!isMounted) return;
-
-  //       // Send SDP with complete ICE candidates
-  //       const response = await fetch(stream, {
-  //         method: 'POST',
-  //         headers: { 'Content-Type': 'application/sdp' },
-  //         body: pc.localDescription?.sdp || offer.sdp
-  //       });
-
-  //       if (!response.ok) {
-  //         throw new Error(`Server returned HTTP ${response.status}`);
-  //       }
-
-  //       const answerSdp = await response.text();
-        
-  //       if (!isMounted) return;
-
-  //       await pc.setRemoteDescription({
-  //         type: 'answer',
-  //         sdp: answerSdp
-  //       });
-
-  //     } catch (err: any) {
-  //       if (!isMounted) return;
-  //       console.error("WebRTC connection failed:", err);
-  //       setStatus('error');
-  //       setErrorMessage(err.message || 'Failed to connect to stream URL');
-  //     }
-  //   };
-
-  //   connectWebRTC();
-
-  //   return () => {
-  //     isMounted = false;
-  //     if (pcRef.current) {
-  //       pcRef.current.close();
-  //       pcRef.current = null;
-  //     }
-  //   };
-  // }, [stream]);
-
-  const [control, setControl] = useState<ControlState>({});
-
-  
-  useEffect(() => {
-    if(control.laps || control.ltg){
+    // if(control.laps || control.ltg || flag === 3 || control.start || control.finish || control.custom){
+    if(control.laps || control.ltg || control.start || control.finish || control.custom){
       setShowBanner(true);
     }
     else{
       setShowBanner(false);
     }
-    if(control.rtmp)setUseWebcam(false);
-    if(control.input)setUseWebcam(true);
+    if(control.rtmp || control.input)setInputDevice('');
+    console.log("Control Ref", controlRef.current);
   }, [control]);
 
   // Display states mapped from Speedhive events
   const [raceTitle, setRaceTitle] = useState<string>('-');
-  const [sessionName, setSessionName] = useState<string>('Live Timing Stream');
+  const [sessionName, setSessionName] = useState<string>('-');
   const [groupName, setGroupName] = useState<string>('-');
   const [sessionBestTime, setSessionBestTime] = useState<string>('0:00.000');
   const [sessionBestRider, setSessionBestRider] = useState<string>('-');
@@ -526,23 +213,49 @@ export default function App() {
           }
         }
         fetchData();
-      // }
-      // if(!sessionIdRef.current && initialLoadRef.current){
-      //   console.log("No sessionId to fetch initial data for");
-      //   connectSignalR("");
-      //   initialLoadRef.current = false;
-      // }
 
   }, [savedSessionId]);
 
+  useEffect(() =>{
+    if(inputDevices.length>0)
+    lastInputDevicesRef.current = inputDevices;
+  },[inputDevices]);
   const handleSpeedHiveUrl = (passedSpeedhiveUrl: string) =>{
     // console.log("url received", passedSpeedhiveUrl);
     setSpeedhiveUrl(passedSpeedhiveUrl);
   };
+  
+  const handleInputDevices = (devices: SelectOption[]) =>{
+    console.log("devices received", devices);
+    setInputDevices(devices);
+  };
+  const gridPagesRef = useRef<number>(0);
+  const handleGridPages = (gridPages: number)=>{
+    gridPagesRef.current = gridPages;
+  }
+  const finishedRacerPagesNum = useRef<number>(0);
+  const handleFinishedRacers = (finishedRacerPages: number) =>{
+      finishedRacerPagesNum.current = finishedRacerPages;
+      console.log("finishedpages", finishedRacerPagesNum.current);
+      
+      if (connectionRef.current && connectionRef.current.readyState === WebSocket.OPEN) {
+        connectionRef.current.send(JSON.stringify({
+          type: 'finishedPages',
+          pages : finishedRacerPages
+        }));
+      }
+  }
+  
   // Scrolling Announcements from hub
   const [latestAnnouncement, setLatestAnnouncement] = useState<string>('');
 
   // Active Riders / Telemetry grid
+  const [isManualMode, setIsManualMode] = useState<boolean>(false);
+  const isManualModeRef = useRef<boolean>(false);
+  useEffect(() => {
+    isManualModeRef.current = isManualMode;
+  }, [isManualMode]);
+
   const [riders, setRiders] = useState<RiderResult[]>(() => {
     return recalculateGaps(INITIAL_RIDERS);
   });
@@ -686,7 +399,11 @@ export default function App() {
 
     return () => clearInterval(timer);
   }, [riders]);
-
+  const startingGridPageRef = useRef<number>(0);
+  const [startingGridPage,setStartingGridPage] = useState<number>(0);
+  useEffect(()=>{
+    startingGridPageRef.current = startingGridPage;
+  },[startingGridPage]);
   // Add websocket log entry
   const addWebSocketLog = (direction: 'in' | 'system' | 'sent' | 'ws' | 'packet' | 'sim', message: string, payloadStr?: string) => {
     setSignalRLogs((prev) => {
@@ -712,7 +429,9 @@ export default function App() {
       text: log.message,
     }));
   }, [signalRLogs]);
+  
   const injectSignalRPacket = (packetObj: SignalRPacket) => {
+    if (isManualModeRef.current) return; // Ignore Speedhive live updates when manual mode is active
     if (!packetObj || !Array.isArray(packetObj.results)) {
       addWebSocketLog('system', "❌ SignalR Error: results is not a valid array");
       return;
@@ -947,7 +666,38 @@ export default function App() {
           }
           else if(message.type === "speedhiveURL"){
               // console.log("New Speedhive URL", message.url);
-              handleLoadSpeedhiveSession(message.url)
+            handleLoadSpeedhiveSession(message.url)
+          }
+          else if(message.type === 'customBanner' && location.pathname === "/sideposition"){
+            setCustomBanner(message.text);
+          }
+          else if(message.type === "startingGrid" && location.pathname === "/startingGrid"){
+              // console.log("New Speedhive URL", message.url);
+              if((startingGridPageRef.current + 1) === gridPagesRef.current){
+                  setStartingGridPage(0);
+              }
+              else{
+                setStartingGridPage(startingGridPageRef.current + 1);
+              }
+          }
+          else if(message.type === "finishedRacerPage" && location.pathname === "/result"){
+            console.log("Setting page",message.page)
+            setfinishedRacerPage(message.page);
+          }
+          else if(message.type === "askFinishedPages" && location.pathname === "/result"){
+            
+            console.log("Sending finished pages:",finishedRacerPage);
+            
+            if (connectionRef.current && connectionRef.current.readyState === WebSocket.OPEN) {
+              connectionRef.current.send(JSON.stringify({
+                type: 'finishedPages',
+                pages : finishedRacerPagesNum.current
+              }));
+            }
+          }
+          else if(message.type === "finishedPages" && location.pathname === "/control"){
+            console.log("finished pages:",message.pages);
+            setFinishedPages(message.pages);
           }
           else if (message.type === "stopwatchState") {
             if (typeof message.isTimerRunning === "boolean") {
@@ -962,7 +712,21 @@ export default function App() {
             // console.log("videoStatus", message.status);
             setControlVideoStatus(message.status);
           }
+          else if(message.type === "macroPad" && location.pathname === '/sideposition'){
+            
+            if(message.trigger){
+              const key = message.trigger.eventName;
+              const controlVal = controlRef.current;
+              console.log("Macropad:" ,key);
+              if(key === "video"){
+              setControl((prevControl) => ({
+              ...prevControl, // Keep all previous keys (e.g., laps: true)
+              ...{video: !controlVal.video}  // Add or overwrite with new keys (e.g., time: true)
+            }));}
+            }
+          }
           else if(message.type === 'askInputDevices' && location.pathname === "/sideposition"){
+            console.log("Sending to control");
             socket.send(
               JSON.stringify({
                 type: 'inputDevices',
@@ -979,20 +743,24 @@ export default function App() {
                 }));
             if(location.pathname === "/sideposition" || location.pathname === "/sideposition/"){
               console.log("Sending to control");
-            socket.send(
-              JSON.stringify({
-                type: 'inputDevices',
-                devices: inputDevices,
-              })
-            );
-
+              socket.send(
+                JSON.stringify({
+                  type: 'inputDevices',
+                  devices: lastInputDevicesRef.current,
+                })
+              );
             }
             if(location.pathname === "/control"){
-              console.log("Asking input devices");
+              console.log("Asking input devices && result pages");
               socket.send(
-              JSON.stringify({
-                type: 'askInputDevices'
-              })
+                JSON.stringify({
+                  type: 'askInputDevices'
+                })
+              );
+              socket.send(
+                JSON.stringify({
+                  type: 'askFinishedPages'
+                })
             );
             }
               setConnectionStatus('connected');
@@ -1009,6 +777,21 @@ export default function App() {
               setConnectionError(message.message || 'Subscription failed');
               addWebSocketLog('system', `❌ Subscription Error: ${message.message}`);
             }
+          } else if (message.type === "manualDataSync") {
+            addWebSocketLog('system', `⚙️ Manual Mode Sync received: enabled=${message.isManualMode}`);
+            setIsManualMode(!!message.isManualMode);
+            if (message.riders && Array.isArray(message.riders)) {
+              setRiders(message.riders);
+            }
+            if (message.sessionInfo) {
+              if (typeof message.sessionInfo.raceTitle === 'string') setRaceTitle(message.sessionInfo.raceTitle);
+              if (typeof message.sessionInfo.sessionName === 'string') setSessionName(message.sessionInfo.sessionName);
+              if (typeof message.sessionInfo.groupName === 'string') setGroupName(message.sessionInfo.groupName);
+              if (typeof message.sessionInfo.raceLaps === 'number') setRaceLaps(message.sessionInfo.raceLaps);
+              if (typeof message.sessionInfo.laps === 'number') setLaps(message.sessionInfo.laps);
+              if (typeof message.sessionInfo.lapsToGo === 'number') setLapsToGo(message.sessionInfo.lapsToGo);
+              if (typeof message.sessionInfo.flag === 'number') setFlag(message.sessionInfo.flag);
+            }
           } else if (message.type === "resultsForSessionReceived") {
             addWebSocketLog('in', `📥 resultsForSessionReceived websocket frame parsed`);
             const data = message.data;
@@ -1018,7 +801,7 @@ export default function App() {
           } else if (message.type === "sessionAddedOrUpdated") {
             addWebSocketLog('in', `🔔 Feed event: sessionAddedOrUpdated`);
             const data = message.data;
-            if (data) {
+            if (data && !isManualModeRef.current) {
               if (data.eNam) setRaceTitle(data.eNam);
               if (data.rnNam) setSessionName(data.rnNam);
               if (data.gNam) setGroupName(data.gNam);
@@ -1060,12 +843,16 @@ export default function App() {
               ...prevControl, // Keep all previous keys (e.g., laps: true)
               ...message.action  // Add or overwrite with new keys (e.g., time: true)
             }));
-            if(control.laps || control.ltg)setShowBanner(true);
+            if(control.laps || control.ltg || control.start || control.finish || control.custom)setShowBanner(true);
             setControlAction(message.action);
+          }
+          else if(message.type === 'setRaceLaps'){
+            console.log("Received race laps",message.laps)
+            setRaceLaps(message.laps);
           }
           else if(message.type === 'video'){
             setStream(message.url);
-            // console.log("url sent:", message.url);
+            console.log("url sent:", message.url);
           }
           else if(message.type === 'errorMessage'){
             setErrorMessageControl(message.error);
@@ -1161,7 +948,11 @@ export default function App() {
       addWebSocketLog('system', `❌ WebSocket initialization failure: ${err.message}`);
     }
   };
-
+  
+  const handleRTMPStatus = (rtmpStatus:string) =>{
+    console.log("RTMP:",rtmpStatus)
+    console.log("stream ref",streamRef.current);
+  };
   // Parse speedhive URL, query endpoint, and startup Websockets
   const handleLoadSpeedhiveSession = async (customUrl?: string) => {
     const urlToUse = customUrl || speedhiveUrl;
@@ -1178,7 +969,7 @@ export default function App() {
 
     localStorage.setItem('speedhive_url', urlToUse);
     setAutoSimulate(false); // disable simulator on real speedhive load
-    
+    setRiders([]); // clear any existing riders before fetching new data
     // 1. Load initial timing tables
     if (eventId) {
       await fetchInitialData(eventId, sessionId);
@@ -1412,9 +1203,36 @@ export default function App() {
       <Routes>
         
         <Route
-          path="/result"
+          path="/manual"
           element={
-            <RaceResultPage
+            <ManualPage
+              riders={riders}
+              setRiders={setRiders}
+              isManualMode={isManualMode}
+              setIsManualMode={setIsManualMode}
+              raceTitle={raceTitle}
+              setRaceTitle={setRaceTitle}
+              sessionName={sessionName}
+              setSessionName={setSessionName}
+              groupName={groupName}
+              setGroupName={setGroupName}
+              raceLaps={raceLaps}
+              setRaceLaps={setRaceLaps}
+              laps={laps}
+              setLaps={setLaps}
+              lapsToGo={lapsToGo}
+              setLapsToGo={setLapsToGo}
+              flag={flag}
+              setFlag={setFlag}
+              socket={connectionRef.current}
+              addWebSocketLog={addWebSocketLog}
+            />
+          }
+        />
+        <Route
+          path="/trophy"
+          element={
+            <TrophyPage
               data={resultData}
               riders={riders}
               raceTitle={raceTitle}
@@ -1423,6 +1241,92 @@ export default function App() {
             />
           }
         />
+        <Route
+          path="/result"
+          element={
+            <RaceResultPage
+              data={resultData}
+              riders={riders}
+              raceTitle={raceTitle}
+              groupName={groupName}
+              sessionName={sessionName}
+              finishedRacerPages={handleFinishedRacers}
+              finishedRacerPage={finishedRacerPage}
+            />
+          }
+        />
+        <Route 
+            path="/control" 
+            element={
+          <DisplayController 
+          socket={connectionRef.current}
+          connectionStatus={connectionStatus} 
+          syncState={control} 
+          inputVideo={controlVideoStatus} 
+          errorMessage={errorMessageControl} 
+          inputDevices={inputDevicesOption} 
+          passSpeedHiveUrl={handleSpeedHiveUrl}
+          globalRaceLaps={raceLaps}
+          globalLaps={laps}
+          globalLtg={lapsToGo}
+          raceTitle={raceTitle}
+          sessionName={sessionName}
+          groupName={groupName}
+          finishedPages={finishedPages}/>
+        } />
+        <Route 
+            path="/sidePosition" 
+            element={
+              <SidePositionPage
+                riders={riders}
+                sessionName={sessionName}
+                raceTitle={raceTitle}
+                groupName={groupName}
+                showBanner={showBanner}
+                control={control}
+                raceLaps={raceLaps}
+                laps={laps}
+                lapsToGo={lapsToGo}
+                flag={flag}
+                raceSeconds={raceSeconds}
+                stream={stream}
+                useWebcam={useWebcam}
+                inputDevice={inputDevice}
+                videoStatus={videoStatus}
+                errorMessage={errorMessage}
+                selectedRiderId={selectedRiderId}
+                setSelectedRiderId={setSelectedRiderId}
+                setIsSetupOpen={setIsSetupOpen}
+                socket={connectionRef.current}
+                inputDevices={handleInputDevices}
+                customBanner={customBanner}
+              />
+            }
+        />
+        <Route 
+          path="/startingGrid"
+          element={
+            <StartingGrid 
+            circuitTitle='SIRKUIT LANUD SUTAN SJAHRIR'
+            racers={riders}
+            activePageIndex={startingGridPage}
+            pages={handleGridPages}
+            raceTitle={raceTitle}
+            groupName={groupName}
+            sessionName={sessionName}
+          />
+          }
+          />
+        <Route 
+          path="/testRTMP"
+          element={
+            <WebRTCVideoPlayer 
+            streamUrl='http://192.168.137.1:8889/live/iPhone/whep'
+            isRtmpActive={true}
+            connStatus={handleRTMPStatus}
+          />
+          }
+          />
         <Route 
             path="/" 
             element={<MainBoardPage
@@ -1436,7 +1340,7 @@ export default function App() {
               raceSeconds={raceSeconds}
               isTimerRunning={isTimerRunning}
               triggerStopwatch={triggerStopwatch}
-              raceLaps={raceLaps || 12}
+              raceLaps={raceLaps}
               setRaceLaps={setRaceLaps}
               isClosedLoop={isClosedLoop}
               setIsClosedLoop={setIsClosedLoop}
@@ -1488,1078 +1392,6 @@ export default function App() {
               playBeep={playBeep}
             />}
         />
-        {false ? <Route path="/old-main" element={<div className="min-h-screen text-zinc-100 font-sans flex flex-col bg-zinc-950 selection:bg-red-600 selection:text-white relative overflow-x-hidden" id="main-container">
-            
-            {/* Background Decoratives */}
-            <div className="absolute top-0 right-0 w-1/3 h-full opacity-5 pointer-events-none overflow-hidden z-0">
-              <div className="absolute -right-10 top-20 text-[350px] font-black italic text-zinc-400 rotate-12 leading-none select-none">GP</div>
-            </div>
-
-            {/* Broadcast Header matching "Sleek Interface" */}
-            <header className={`bg-zinc-900 border-b border-zinc-850 relative z-20 shadow-xl shadow-black/40 animate-fade-in ${flag === 3 ? 'finished' : ''}`} id="timing-header">
-              <div className="absolute top-0 left-0 w-full h-[3px] bg-red-600"></div>
-              <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col lg:flex-row items-center justify-between gap-4">
-                
-                {/* Logo Title and Live Badge */}
-                <div className="flex items-center gap-6 w-full lg:w-auto">
-                  <div 
-                    onClick={() => {
-                      setIsSetupOpen(true);
-                      playBeep('tick');
-                    }}
-                    className={`px-3 py-1.5 text-[10px] font-black tracking-widest flex items-center gap-2 transition-all cursor-pointer select-none rounded ${
-                      connectionStatus === 'connected' 
-                        ? 'bg-emerald-600 text-white hover:bg-emerald-700' 
-                        : connectionStatus === 'connecting'
-                          ? 'bg-amber-600 text-white hover:bg-amber-700 animate-pulse'
-                          : 'bg-red-600 text-white hover:bg-red-700'
-                    }`}
-                  >
-                    <span className={`w-2 h-2 rounded-full bg-white ${connectionStatus === 'connected' && 'animate-ping'}`}></span>
-                    {connectionStatus === 'connected' ? 'ONLINE' : connectionStatus === 'connecting' ? 'CONNECTING' : connectionStatus === 'waiting' ? 'WAITING' : 'OFFLINE' }
-                  </div>
-                  <div className="border-l border-zinc-700 h-8 hidden md:block"></div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest leading-none">
-                        {sessionName || 'Motorsports timing board'}
-                      </span>
-                    </div>
-                    <h1 className="text-xl font-black italic tracking-tighter uppercase text-zinc-100 leading-tight">
-                      {raceTitle} <span className="text-zinc-500 font-normal">/ {groupName || 'No active session'}</span>
-                    </h1>
-                  </div>
-                </div>
-
-                {/* CUSTOM RACE TIMER STOPWATCH CONTROL */}
-                <div className="flex flex-column flex-wrap items-center gap-4 bg-zinc-950/80 border border-zinc-800 px-5 py-2.5 rounded-lg text-xs font-mono">
-                  <div>
-                    <div>
-                      <div className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest leading-none mb-1">Race clock</div>
-                      <div className="text-xl font-mono font-bold text-red-500 flex items-center gap-1">
-                        <Clock className="w-4 h-4 text-zinc-500 animate-pulse" />
-                        {formatRaceTimer(raceSeconds)}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1 mb-1">
-                      <button
-                        onClick={() => {
-                          triggerStopwatch(isTimerRunning ? 'pause' : 'start');
-                          playBeep('tick');
-                        }}
-                        className={`p-1.5 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 transition-colors border border-zinc-850 flex items-center gap-1 cursor-pointer`}
-                        title={isTimerRunning ? "Pause timer" : "Start timer"}
-                      >
-                        {isTimerRunning ? <Pause className="w-3.5 h-3.5 text-amber-500" /> : <Play className="w-3.5 h-3.5 text-emerald-500" />}
-                      </button>
-                      <button
-                        onClick={() => {
-                          triggerStopwatch('reset');
-                          playBeep('tick');
-                        }}
-                        className="p-1.5 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 transition-colors border border-zinc-800 cursor-pointer"
-                        title="Reset timer"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5 text-zinc-400" />
-                      </button>
-                    </div>
-                  </div>
-                  
-                    {/* GEAR BOX TRIGGER FOR COLLAPSIBLE SETUP PANEL */}
-                    <button
-                      onClick={() => {
-                        setIsSetupOpen(true);
-                        playBeep('tick');
-                      }}
-                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white border border-red-700 rounded-lg text-xs font-sans font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-red-950/40"
-                      title="Open Timing Desk Settings Drawer"
-                    >
-                      <Settings className="w-4 h-4" />
-                      SETUP DESK
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 grid-rows-2 gap-2">
-                    <div className="hidden sm:block">
-                      <div className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest leading-none mb-1">Track target</div>
-                      <div className="text-xl font-bold italic text-zinc-200 font-sans leading-none">
-                        {raceLaps} <span className="text-xs text-zinc-500 font-normal">{isClosedLoop ? 'LAPS (CLOSED)' : 'POINT-TO-POINT'}</span>
-                      </div>
-                    </div>
-
-                    <div className="hidden lg:block">
-                      <div className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest leading-none mb-1">Fastest lap</div>
-                      <div className="text-xl font-bold font-mono text-purple-400 leading-none">
-                        {sessionBestTime} <span className="text-[10px] text-zinc-500 font-normal">({sessionBestRider})</span>
-                      </div>
-                    </div>
-                    {isClosedLoop && (
-                    <div className="hidden sm:block">
-                      <div className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest leading-none mb-1">Laps</div>
-                      <div className="text-xl font-bold italic text-zinc-200 font-sans leading-none">
-                        {laps} <span className="text-xs text-zinc-500 font-normal">LAPS</span>
-                      </div>
-                    </div>
-                    )}
-                    {isClosedLoop && (
-                    <div className="hidden sm:block">
-                      <div className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest leading-none mb-1">Laps to go</div>
-                      <div className="text-xl font-bold italic text-zinc-200 font-sans leading-none">
-                        {(flag === 3) ? 'Finished' : lapsToGo } {flag !== 3 && (<span className="text-xs text-zinc-500 font-normal">LAPS</span>)}
-                      </div>
-                    </div>
-                    )}
-                  </div>      
-
-
-              </div>
-            </header>
-
-            {/* DETAILED TRACK CONSOLE - TAKE 100% ENTIRE PAGE DISPLAY */}
-            <main className="flex-1 max-w-7xl w-full mx-auto p-6 flex flex-col gap-6 relative z-10 animate-fade-in" id="main-content">
-              
-              {/* LEADERBOARD VIEW PORT - 100% WIDTH FOR MAXIMUM SPACING AND CLEAN LOOK */}
-              <section className="w-full flex flex-col gap-4" id="leaderboard-section">
-
-                {/* MOTORSPORT LEADERBOARD PANEL */}
-                <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col relative z-10" id="leaderboard-board-panel">
-                  
-                  {/* RACING TRACK LAP BANNER */}
-                  <div className="bg-zinc-900/90 px-6 py-4 border-b border-zinc-800 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 w-[173px]">
-                      <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-md shadow-emerald-500/50"></span>
-                      <span className="text-xs font-black uppercase tracking-widest text-zinc-400 italic">Leaderboard Timing Console</span>
-                    </div>
-                          {/* LATEST ANNOUNCEMENT FLASHING TICKER */}
-                    {latestAnnouncement && (
-                      <div className="bg-red-950 border-y rounded-md border-red-900/50 text-red-200 flex items-center gap-3 relative overflow-hidden z-10 animate-pulse w-full">
-                        <div className="flex items-center gap-2 font-black tracking-widest text-[9px] bg-red-600 text-white px-2.5 py-1 uppercase rounded leading-none shrink-0">
-                          <Bell className="w-3.5 animate-bounce" /> Broadcast
-                        </div>
-                        <div className="font-mono text-xs md:text-sm uppercase tracking-wide truncate flex-1 font-bold">
-                          {latestAnnouncement}
-                        </div>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2">
-                      {soundEnabled ? (
-                        <button onClick={() => setSoundEnabled(false)} className="p-1 rounded text-zinc-500 hover:text-zinc-300 cursor-pointer" title="Mute audio feed">
-                          <Volume2 className="w-4 h-4" />
-                        </button>
-                      ) : (
-                        <button onClick={() => setSoundEnabled(true)} className="p-1 rounded text-red-500 hover:text-red-400 cursor-pointer" title="Unmute audio feed">
-                          <VolumeX className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* LEADERBOARD HEADERS - Position, Number, Rider Name, and Time */}
-                  <div className="grid grid-cols-12 bg-zinc-900/60 py-4.5 px-6 text-[10px] font-black uppercase tracking-[0.25em] text-zinc-500 italic border-b border-zinc-800">
-                    <div className="col-span-2 sm:col-span-1 text-right"><span className="padding-inline-end pe-4">Stat</span> Pos</div>
-                    <div className="col-span-2 sm:col-span-1 text-center">No.</div>
-                    <div className="col-span-5 sm:col-span-6 pl-4">Rider / Team Specifications</div>
-                    <div className="col-span-3 text-right">Time telemetry (best / lst)</div>
-                  </div>
-
-                  {/* REORDERING LIST WITH SPRING LAYOUT ANIMATIONS */}
-                  <div className="divide-y divide-zinc-950 p-3 min-h-[550px] bg-zinc-900/10 relative" id="riders-reordering-list">
-                    <AnimatePresence initial={false}>
-                      {riders.length === 0 ? (
-                        <div className="text-center py-24 text-zinc-500 flex flex-col items-center justify-center gap-4 animate-fade-in">
-                          <Tv className="w-12 h-12 text-zinc-700 animate-pulse" />
-                          <div>
-                            <h3 className="font-bold text-zinc-400 uppercase text-sm tracking-widest">No active timing feed</h3>
-                            <p className="text-xs text-zinc-650 max-w-sm mt-1.5 leading-relaxed">
-                              The live timing screen is ready. Paste a Speedhive Session URL into the <span className="text-red-500 font-bold">SETUP Desk</span> at the top-right to start receiving live telemetry updates.
-                            </p>
-                          </div>
-                        </div>
-                        ) : (
-                            sortedRiders.map((rider, index) => {
-                              // Guaranteed true ONLY for the first element in the array
-                              const isLeader = index === 0;
-
-                              // Position border indicator styles
-                              const rowBorderClass = isLeader
-                                ? "border-l-4 border-red-600 bg-zinc-900/40 hover:bg-zinc-800/60"
-                                : "border-l-4 border-zinc-700 bg-zinc-900/10 hover:bg-zinc-800/50";
-
-                              const posTextStyle = isLeader
-                                ? "text-3xl font-black italic text-red-600 font-mono tracking-tight"
-                                : "text-2xl font-black italic text-zinc-400 font-mono tracking-tight";
-
-                              // Flash highlighting on position changes
-                              const isRecentlyChanged = rider.changeTime && (Date.now() - rider.changeTime < 1300);
-                              const flashClass = isRecentlyChanged
-                                ? rider.changeDirection === 'up'
-                                  ? 'bg-emerald-950/60 border-l-emerald-500 transition-all duration-300'
-                                  : rider.changeDirection === 'down'
-                                    ? 'bg-red-950/60 border-l-red-500 transition-all duration-300'
-                                    : ''
-                                : '';
-
-                              const isSelected = selectedRiderId === rider.id;
-
-                              return (
-                                <motion.div
-                                  key={rider.id}
-                                  layoutId={`rider-row-${rider.id}`}
-                                  className={`grid grid-cols-12 items-center py-4 px-6 my-2.5 rounded-r-lg border-y border-r border-transparent transition-all duration-500 cursor-pointer ${
-                                    isSelected ? 'bg-zinc-850 border-zinc-700 shadow-2xl' : rowBorderClass
-                                  } ${flashClass}`}
-                                  id={`rider-row-${rider.id}`}
-                                  onClick={() => {
-                                    setSelectedRiderId(isSelected ? null : rider.id);
-                                    setIsSetupOpen(true);
-                                    playBeep('tick');
-                                  }}
-                                >
-                                  {/* POSITION & DELTA */}
-                                  <div className="col-span-2 sm:col-span-1 flex items-center justify-self-end gap-3 pe-4">
-                                    <div className="hidden sm:block">
-                                      {rider.changeDirection === 'up' && (
-                                        <ChevronUp className="w-4 h-4 text-emerald-500" />
-                                      )}
-                                      {rider.changeDirection === 'down' && (
-                                        <ChevronDown className="w-4 h-4 text-red-500" />
-                                      )}
-                                      {(!rider.changeDirection || rider.changeDirection === 'steady') && (
-                                        <span className="text-zinc-650 text-3xl font-bold">
-                                          {rider.if ? '🏁' : '-'}
-                                        </span>
-                                      )}
-                                    </div>
-
-                                    <span className={posTextStyle} id={`rider-pos-${rider.id}`}>
-                                      {(index + 1).toString().padStart(2, '0')}
-                                    </span>
-                                  </div>
-
-                                  {/* VEHICLE NO */}
-                                  <div className="col-span-2 sm:col-span-1 text-center">
-                                    <span className="text-3xl font-black italic tracking-tighter text-zinc-100 select-none font-sans">
-                                      {rider.no}
-                                    </span>
-                                  </div>
-
-                                  {/* RIDER NAME / TEAM */}
-                                  <div className="col-span-5 sm:col-span-6 pl-4">
-                                    <div className="flex flex-col">
-                                      <div className="flex items-center gap-2.5">
-                                        <span className="text-lg md:text-xl font-black uppercase tracking-tight text-zinc-100 leading-none">
-                                          {rider.nam}
-                                        </span>
-                                        
-                                        {rider.ibt && (
-                                          <span className="text-[8px] bg-purple-950 text-purple-300 font-extrabold px-1.5 py-0.5 rounded border border-purple-600/40 flex items-center gap-0.5 uppercase tracking-wider leading-none">
-                                            <Sparkles className="w-2.5 h-2.5 shrink-0" /> RECORD
-                                          </span>
-                                        )}
-                                      </div>
-                                      {rider.cb && (
-                                        <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mt-1.5 leading-none truncate font-sans">
-                                          {rider.cb}
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {/* BEST & LAST TIMINGS */}
-                                  <div className="col-span-3 text-right flex flex-col justify-center">
-                                    <div className="font-mono text-lg md:text-xl font-black text-zinc-100 tracking-tight leading-none">
-                                      {rider.btTm || "--:--.---"}
-                                    </div>
-                                    <div className="text-[10px] text-zinc-500 font-mono mt-1.5 leading-none uppercase tracking-wider flex items-center justify-end gap-1">
-                                      <span className="font-bold">LST:</span> {rider.lsTm || "--:--.---"}
-                                      {rider.ls !== undefined && (
-                                        <span className="text-zinc-650 bg-zinc-950 px-1 py-0.2 rounded font-normal text-[8px] border border-zinc-850 ml-1">
-                                          L.{rider.ls}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </motion.div>
-                              );
-                            })
-                        )}
-                    </AnimatePresence>
-                  </div>
-
-                </div>
-              </section>
-
-            </main>
-            {/* SETTINGS COLLAPSIBLE DRAWER PANEL */}
-            <AnimatePresence>
-              {isSetupOpen && (
-                <>
-                  {/* Dark blur overlay backdrop */}
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 0.6 }}
-                    exit={{ opacity: 0 }}
-                    onClick={() => setIsSetupOpen(false)}
-                    className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40"
-                  />
-
-                  {/* Sidebar drawer content */}
-                  <motion.div
-                    initial={{ x: "100%" }}
-                    animate={{ x: 0 }}
-                    exit={{ x: "100%" }}
-                    transition={{ type: "spring", damping: 26, stiffness: 210 }}
-                    className="fixed inset-y-0 right-0 w-full sm:w-[450px] bg-zinc-900 border-l border-zinc-800 shadow-2xl z-50 flex flex-col overflow-hidden"
-                    id="settings-drawer"
-                  >
-                    {/* Drawer Header */}
-                    <div className="bg-zinc-950 px-6 py-5 border-b border-zinc-800 flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <Settings className="w-5 h-5 text-red-500 animate-spin-slow" />
-                        <div>
-                          <h2 className="text-sm font-black tracking-widest uppercase text-zinc-200">Timing Desk Setup</h2>
-                          <p className="text-[10px] text-zinc-500 font-mono">SIGNALR FEED & SYSTEM CONFIG</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => setIsSetupOpen(false)}
-                        className="p-1.5 rounded-md hover:bg-zinc-850 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-
-                    {/* Drawer Scroll Body */}
-                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
-
-                      {/* SPEEDHIVE WS FEEDS CONFIG */}
-                      <div className="space-y-3 bg-zinc-950/40 p-4 border border-zinc-800 rounded-xl">
-                        <h3 className="text-xs font-black tracking-widest uppercase text-red-500 italic flex items-center gap-1.5">
-                          <Link className="w-3.5 h-3.5 animate-pulse" /> Speedhive Live timing URL
-                        </h3>
-                        <p className="text-xs text-zinc-400 leading-relaxed">
-                          Enter the entire Speedhive session page URL. The applet automatically parses the active WebSocket session parameter and starts the telemetry feed.
-                        </p>
-                        
-                        <div className="space-y-2">
-                          <textarea
-                            value={speedhiveUrl}
-                            onChange={(e) => setSpeedhiveUrl(e.target.value)}
-                            placeholder="Paste Speedhive session URL here..."
-                            className="w-full h-20 bg-zinc-500 border border-zinc-800 p-3 rounded text-xs font-mono text-zinc-300 focus:outline-none focus:border-red-600 leading-relaxed"
-                          />
-                          <div className="text-[9px] text-zinc-500 font-mono leading-relaxed bg-zinc-950 p-2.5 rounded border border-zinc-850">
-                            <strong>Supported Format Example:</strong><br />
-                            https://speedhive.mylaps.com/livetiming/BB89C9A089830254-2147485566/sessions/BB89C9A089830254-2147485566-1073745079
-                          </div>
-                        </div>
-
-                        <div className="flex gap-2 pt-1">
-                          <button
-                            onClick={() => {
-                              setRiders(recalculateGaps(INITIAL_RIDERS));
-                              setRaceTitle('-');
-                              setSessionName('Live Timing Stream');
-                              setGroupName('-');
-                              setFlag(0);
-                              addWebSocketLog('system', 'New Speedhive configurations');
-                              setConnectionStatus('setting up');      
-                              setLatestAnnouncement("");
-                              handleLoadSpeedhiveSession()
-                            }}
-                            className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-sans font-black uppercase tracking-wider text-xs rounded transition-all cursor-pointer text-center"
-                          >
-                            Connect Live Stream
-                          </button>
-                          {speedhiveUrl && (
-                            <button
-                              onClick={() => {
-                                setSpeedhiveUrl('');
-                                localStorage.removeItem('speedhive_url');
-                                setRiders(recalculateGaps(INITIAL_RIDERS));
-                                setRaceTitle('-');
-                                setSessionName('Live Timing Stream');
-                                setGroupName('-');
-                                setConnectionStatus('disconnected')
-                                setFlag(0);
-                                setLatestAnnouncement("");
-                                addWebSocketLog('system', '🧹 Speedhive configurations reset back to pristine demo starting grid.');
-                              }}
-                              className="px-3 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 text-xs font-bold uppercase tracking-wider rounded cursor-pointer"
-                            >
-                              Reset
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* SIGNALR HUB CONNECTION STATE */}
-                      <div className="space-y-3 bg-zinc-950/40 p-4 border border-zinc-800 rounded-xl">
-                        <h3 className="text-xs font-black tracking-widest uppercase text-zinc-400 italic">
-                          Connection Info Status
-                        </h3>
-                        <div className="grid grid-cols-2 gap-3 text-xs font-mono">
-                          <div className="bg-zinc-950 p-2.5 border border-zinc-850 rounded">
-                            <span className="text-zinc-500 text-[9px] uppercase font-bold block leading-none">Hub Status</span>
-                            <span className={`font-bold mt-1.5 block flex items-center gap-1.5 ${
-                              connectionStatus === 'connected' 
-                                ? 'text-emerald-400' 
-                                : connectionStatus === 'connecting' || connectionStatus === 'setting up'
-                                  ? 'text-amber-400' 
-                                  : 'text-red-500'
-                            }`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${
-                                connectionStatus === 'connected' 
-                                  ? 'bg-emerald-400 animate-pulse' 
-                                  : connectionStatus === 'connecting' 
-                                    ? 'bg-amber-400 animate-ping' 
-                                    : 'bg-red-500'
-                              }`} />
-                              {connectionStatus.toUpperCase()}
-                            </span>
-                          </div>
-                          <div className="bg-zinc-950 p-2.5 border border-zinc-850 rounded">
-                            <span className="text-zinc-500 text-[9px] uppercase font-bold block leading-none">Session Code</span>
-                            <span className="text-zinc-300 font-bold mt-1.5 block truncate">
-                              {parseSpeedhiveUrl(speedhiveUrl).sessionId ? parseSpeedhiveUrl(speedhiveUrl).sessionId?.substring(0, 10) + '...' : 'Demo Mode'}
-                            </span>
-                          </div>
-                        </div>
-
-                        {connectionError && (
-                          <div className="p-2.5 bg-red-950/40 border border-red-900 text-red-300 text-[10px] font-mono rounded leading-relaxed">
-                            <strong>WebSocket Error:</strong> {connectionError}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* NUMBER OF RACE LAPS AND OPEN TRACK OPTIONS */}
-                      <div className="space-y-3 bg-zinc-950/40 p-4 border border-zinc-800 rounded-xl">
-                        <h3 className="text-xs font-black tracking-widest uppercase text-zinc-400 italic">
-                          Race Grid Configuration
-                        </h3>
-                        
-                        <div className="space-y-4">
-                          <div className="flex flex-col gap-1.5">
-                            <label className="text-[10px] text-zinc-500 uppercase font-black tracking-wider">Number of Race Laps</label>
-                            <input
-                              type="number"
-                              min="1"
-                              max="200"
-                              value={raceLaps}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value, 10) || 12;
-                                setRaceLaps(val);
-                                localStorage.setItem('race_laps', val.toString());
-                              }}
-                              className="bg-zinc-950 border border-zinc-800 px-3 py-2 rounded text-xs text-zinc-100 font-mono focus:outline-none focus:border-red-600"
-                            />
-                          </div>
-
-                          <div className="flex items-center justify-between py-2 border-t border-zinc-850">
-                            <div className="flex flex-col">
-                              <span className="text-xs font-bold text-zinc-200">Closed Loop Track Circuit</span>
-                              <span className="text-[10px] text-zinc-500 font-mono">Uncheck for Open Loop point-to-point race</span>
-                            </div>
-                            <input
-                              type="checkbox"
-                              checked={isClosedLoop}
-                              onChange={(e) => {
-                                setIsClosedLoop(e.target.checked);
-                                localStorage.setItem('is_closed_loop', e.target.checked.toString());
-                              }}
-                              className="w-4 h-4 rounded text-red-600 focus:ring-red-500 accent-red-600 bg-zinc-950 border-zinc-800 cursor-pointer"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* DYNAMIC SANDBOX SIMULATION SYSTEM */}
-                      <div className="space-y-3 bg-zinc-950/40 p-4 border border-zinc-800 rounded-xl">
-                        <div className="flex items-center justify-between border-b border-zinc-850 pb-2">
-                          <h3 className="text-xs font-black tracking-widest uppercase text-zinc-400 italic flex items-center gap-1.5">
-                            <Activity className="w-3.5 h-3.5 text-red-500" /> AI Race Simulator
-                          </h3>
-                          <span className={`px-2 py-0.5 rounded text-[8px] font-mono uppercase font-bold flex items-center gap-1 ${
-                            autoSimulate ? 'bg-emerald-950 border border-emerald-800 text-emerald-400' : 'bg-zinc-950 border border-zinc-850 text-zinc-500'
-                          }`}>
-                            {autoSimulate ? 'Enabled' : 'Paused'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-zinc-400 leading-relaxed">
-                          Toggle automatic grid updates to simulate race progress, position swaps, sector timing shifts, and record lap events.
-                        </p>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            onClick={() => { setAutoSimulate(true); playBeep('tick'); }}
-                            className={`py-2 px-3 rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                              autoSimulate ? 'bg-red-600 text-white shadow-md' : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850'
-                            }`}
-                          >
-                            <Play className="w-3.5 h-3.5" /> Start Sim
-                          </button>
-                          <button
-                            onClick={() => { setAutoSimulate(false); playBeep('tick'); }}
-                            className={`py-2 px-3 rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                              !autoSimulate ? 'bg-red-600 text-white shadow-md' : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850'
-                            }`}
-                          >
-                            <Pause className="w-3.5 h-3.5" /> Pause Sim
-                          </button>
-                        </div>
-
-                        <div className="flex flex-col gap-2 pt-1 border-t border-zinc-850">
-                          <div className="flex justify-between items-center text-xs font-mono">
-                            <span className="text-zinc-500 uppercase tracking-widest text-[9px] font-bold">Grid Shift Period</span>
-                            <span className="text-red-500 font-extrabold">{simSpeedSeconds} SECONDS</span>
-                          </div>
-                          <input 
-                            type="range" 
-                            min="1" 
-                            max="15" 
-                            step="1"
-                            value={simSpeedSeconds}
-                            onChange={(e) => setSimSpeedSeconds(parseInt(e.target.value, 10))}
-                            className="w-full h-1 bg-zinc-950 rounded-lg appearance-none cursor-pointer accent-red-600"
-                          />
-                        </div>
-
-                        <div className="border border-zinc-800 bg-zinc-950 p-3 rounded-lg flex flex-col gap-2">
-                          <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-extrabold font-mono">Sim Command Actions</span>
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              onClick={triggerManualOvertake}
-                              className="py-2 bg-zinc-900 hover:bg-zinc-850 text-zinc-100 uppercase tracking-wide font-black text-[10px] rounded transition-all flex items-center justify-center gap-1 border border-zinc-800 cursor-pointer"
-                            >
-                              <Zap className="w-3.5 h-3.5 text-red-500 animate-pulse" /> Force Swap
-                            </button>
-                            <button
-                              onClick={handleResetTiming}
-                              className="py-2 bg-zinc-900 hover:bg-zinc-850 text-zinc-100 uppercase tracking-wide font-black text-[10px] rounded transition-all flex items-center justify-center gap-1 border border-zinc-800 cursor-pointer"
-                            >
-                              <RotateCcw className="w-3.5 h-3.5 text-zinc-400" /> Reset All
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* ADD RACER GRID CUSTOMIZATION PANEL */}
-                      <div className="space-y-3 bg-zinc-950/40 p-4 border border-zinc-800 rounded-xl">
-                        <div className="flex items-center justify-between border-b border-zinc-850 pb-2">
-                          <h3 className="text-xs font-black tracking-widest uppercase text-zinc-400 italic">
-                            Rider Pack Management
-                          </h3>
-                          <button
-                            onClick={() => setIsEditingGrid(!isEditingGrid)}
-                            className="text-[9px] font-bold bg-zinc-950 px-2.5 py-1 rounded hover:bg-zinc-850 hover:text-white text-zinc-400 font-mono transition-all border border-zinc-850 uppercase tracking-wider cursor-pointer"
-                          >
-                            {isEditingGrid ? 'Close Form' : 'Add Rider'}
-                          </button>
-                        </div>
-
-                        {isEditingGrid && (
-                          <form onSubmit={handleAddRider} className="space-y-3 bg-zinc-950 p-4 rounded-xl border border-zinc-850" id="add-rider-form">
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="flex flex-col gap-1">
-                                <label className="text-[9px] text-zinc-500 uppercase font-black">Rider Name</label>
-                                <input 
-                                  type="text" 
-                                  placeholder="Maxim Kirwan"
-                                  value={newRiderName}
-                                  onChange={(e) => setNewRiderName(e.target.value)}
-                                  className="bg-zinc-900 text-xs px-3 py-2 rounded text-zinc-100 border border-zinc-800 focus:outline-none focus:border-red-600"
-                                  required
-                                />
-                              </div>
-                              <div className="flex flex-col gap-1">
-                                <label className="text-[9px] text-zinc-500 uppercase font-black">Number</label>
-                                <input 
-                                  type="text" 
-                                  placeholder="68"
-                                  value={newRiderNo}
-                                  onChange={(e) => setNewRiderNo(e.target.value)}
-                                  className="bg-zinc-900 text-xs px-3 py-2 rounded text-zinc-100 border border-zinc-800 focus:outline-none focus:border-red-600 font-mono"
-                                  required
-                                />
-                              </div>
-                            </div>
-
-                            <div className="flex flex-col gap-1">
-                              <label className="text-[9px] text-zinc-500 uppercase font-black">Club Name / Team Team</label>
-                              <input 
-                                type="text" 
-                                placeholder="Team Name"
-                                value={newRiderTeam}
-                                onChange={(e) => setNewRiderTeam(e.target.value)}
-                                className="bg-zinc-900 text-xs px-3 py-2 rounded text-zinc-100 border border-zinc-800 focus:outline-none focus:border-red-600 w-full"
-                              />
-                            </div>
-
-                            <button
-                              type="submit"
-                              className="w-full py-2 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1 cursor-pointer"
-                            >
-                              <PlusCircle className="w-4 h-4" /> Add Rider To Grid
-                            </button>
-                          </form>
-                        )}
-
-                        {/* Inline profile editor panel if a rider row is highlighted */}
-                        {selectedRiderId && (
-                          <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 flex flex-col gap-3" id="selected-rider-telemetry-profile">
-                            {(() => {
-                              const rider = riders.find(r => r.id === selectedRiderId);
-                              if (!rider) return <p className="text-xs text-zinc-500">Rider record not found.</p>;
-                              return (
-                                <>
-                                  <div className="flex justify-between items-start border-b border-zinc-850 pb-2">
-                                    <div>
-                                      <span className="text-[9px] uppercase font-black tracking-wider text-red-500 italic">Rider Specs Profile</span>
-                                      <h3 className="text-sm font-bold text-zinc-100 uppercase">{rider.nam}</h3>
-                                    </div>
-                                    <span className="text-2xl font-black italic text-zinc-100">
-                                      #{rider.no}
-                                    </span>
-                                  </div>
-
-                                  <div className="grid grid-cols-2 gap-3 text-xs font-mono">
-                                    <div>
-                                      <span className="text-zinc-500 text-[9px] block leading-none uppercase font-black">Class Team</span>
-                                      <span className="text-zinc-300 font-bold block truncate">{rider.cb || "-"}</span>
-                                    </div>
-                                    <div>
-                                      <span className="text-zinc-500 text-[9px] block leading-none uppercase font-black font-mono">Lap record</span>
-                                      <span className="text-zinc-300 font-bold">{rider.btTm || "--:--.---"}</span>
-                                    </div>
-                                  </div>
-
-                                  {editingRider?.id === rider.id ? (
-                                    <form onSubmit={handleUpdateRiderSpecs} className="space-y-3.5 border-t border-zinc-800 pt-3" id="inline-edit-profile-form">
-                                      <span className="text-[9px] text-red-500 font-black uppercase tracking-wider italic block">Inline Edit Specifications</span>
-                                      
-                                      <div className="grid grid-cols-2 gap-2">
-                                        <input 
-                                          type="text" 
-                                          value={editingRider.nam} 
-                                          onChange={(e) => setEditingRider({ ...editingRider, nam: e.target.value })}
-                                          className="bg-zinc-900 p-2 text-xs text-zinc-100 rounded border border-zinc-800"
-                                          placeholder="Name"
-                                        />
-                                        <input 
-                                          type="text" 
-                                          value={editingRider.no} 
-                                          onChange={(e) => setEditingRider({ ...editingRider, no: e.target.value })}
-                                          className="bg-zinc-900 p-2 text-xs text-zinc-100 rounded border border-zinc-800 font-mono"
-                                          placeholder="No"
-                                        />
-                                      </div>
-
-                                      <div className="grid grid-cols-2 gap-2">
-                                        <input 
-                                          type="text" 
-                                          value={editingRider.btTm} 
-                                          onChange={(e) => setEditingRider({ ...editingRider, btTm: e.target.value })}
-                                          className="bg-zinc-900 p-2 text-xs text-zinc-100 rounded border border-zinc-800 font-mono"
-                                          placeholder="Best Lap"
-                                        />
-                                        <input 
-                                          type="text" 
-                                          value={editingRider.cb} 
-                                          onChange={(e) => setEditingRider({ ...editingRider, cb: e.target.value })}
-                                          className="bg-zinc-900 p-2 text-xs text-zinc-100 rounded border border-zinc-800"
-                                          placeholder="Team Name"
-                                        />
-                                      </div>
-
-                                      <div className="flex gap-2">
-                                        <button
-                                          type="submit"
-                                          className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
-                                        >
-                                          Save Specs
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => setEditingRider(null)}
-                                          className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 rounded text-xs font-mono cursor-pointer"
-                                        >
-                                          Cancel
-                                        </button>
-                                      </div>
-                                    </form>
-                                  ) : (
-                                    <div className="flex items-center gap-2 border-t border-zinc-850 pt-2.5">
-                                      <button
-                                        onClick={() => setEditingRider({ ...rider })}
-                                        className="flex-1 py-2 bg-zinc-900 hover:bg-zinc-850 text-zinc-300 hover:text-zinc-100 rounded text-xs font-bold uppercase tracking-wider transition-all border border-zinc-800 flex items-center justify-center gap-1.5 cursor-pointer"
-                                      >
-                                        <Edit3 className="w-3.5 h-3.5" /> Edit specs
-                                      </button>
-                                      
-                                      <button
-                                        onClick={() => handleDeleteRider(rider.id, rider.nam)}
-                                        className="px-3 py-2 bg-red-950/60 hover:bg-red-900/60 text-red-450 hover:text-red-200 rounded text-xs font-bold uppercase tracking-wider transition-all border border-red-900/30 flex items-center justify-center gap-1.5 cursor-pointer"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" /> Remove
-                                      </button>
-                                    </div>
-                                  )}
-                                </>
-                              );
-                            })()}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* MICRO BROADCAST LOGS */}
-                      <div className="space-y-3 bg-zinc-950/40 p-4 border border-zinc-800 rounded-xl">
-                        <div className="flex items-center justify-between border-b border-zinc-850 pb-2">
-                          <h3 className="text-xs font-black tracking-widest uppercase text-zinc-400 italic flex items-center gap-1.5">
-                            <Terminal className="w-3.5 h-3.5 text-red-500" /> WebSockets Feeder Logs
-                          </h3>
-                          <button 
-                            onClick={() => setSignalRLogs([])} 
-                            className="text-[9px] uppercase font-mono text-red-500 hover:text-red-400 transition-all font-bold tracking-widest cursor-pointer"
-                          >
-                            Clear
-                          </button>
-                        </div>
-
-                        <div className="h-44 overflow-y-auto font-mono text-[10px] flex flex-col gap-2 divide-y divide-zinc-950 leading-normal" id="signalr-logs-list">
-                          {signalRLogs.length === 0 ? (
-                            <div className="text-zinc-650 italic py-4 text-center">Console is empty. Waiting for SignalR client activity...</div>
-                          ) : (
-                            signalRLogs.map((log) => (
-                              <div key={log.id} className="pt-2 flex flex-col gap-1 first:pt-0">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[9px] text-zinc-500">{log.timestamp}</span>
-                                  <span className={`text-[8px] px-1.5 py-0.5 rounded font-black tracking-wider uppercase ${
-                                    log.direction === 'in' 
-                                      ? 'bg-[#ffe4e6]/10 text-red-400 border border-red-900/30' 
-                                      : log.direction === 'sent' 
-                                        ? 'bg-zinc-950 text-zinc-400 border border-zinc-850' 
-                                        : 'bg-zinc-950 text-zinc-500 border border-zinc-850'
-                                  }`}>
-                                    {log.direction === 'in' ? 'WS RECV' : log.direction === 'sent' ? 'WS PUSH' : 'SYS'}
-                                  </span>
-                                </div>
-                                <span className="text-zinc-300 break-words font-mono leading-relaxed">{log.message}</span>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-
-                    </div>
-
-                    {/* Drawer Footer */}
-                    <div className="bg-zinc-950 px-6 py-4 border-t border-zinc-800 text-center text-[10px] font-mono text-zinc-500 uppercase tracking-wider font-bold">
-                      🖧 SignalR /racingHub Link Engine
-                    </div>
-                  </motion.div>
-                </>
-              )}
-            </AnimatePresence>
-
-            {/* FOOTER TIMING STRIP */}
-            <footer className="bg-zinc-900 border-t border-zinc-850 py-4 text-center text-[10px] font-mono text-zinc-500 mt-auto uppercase tracking-wider font-bold" id="timing-footer">
-              <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-                <span>Broadcast Desk • Built for Speed • © 2026 Fathir Pahlevi</span>
-                <span>Feed monitors active • 120hz frame cycles</span>
-              </div>
-            </footer>
-
-          </div>} /> : null}
-        <Route 
-            path="/control" 
-            element={
-          <DisplayController socket={connectionRef.current} connectionStatus={connectionStatus} syncState={control} inputVideo={controlVideoStatus} errorMessage={errorMessageControl} inputDevices={inputDevicesOption} passSpeedHiveUrl={handleSpeedHiveUrl}/>
-        } />
-        <Route 
-            path="/sidePosition" 
-            element={
-              <SidePositionPage
-                riders={riders}
-                sessionName={sessionName}
-                raceTitle={raceTitle}
-                groupName={groupName}
-                showBanner={showBanner}
-                control={control}
-                raceLaps={raceLaps}
-                laps={laps}
-                lapsToGo={lapsToGo}
-                flag={flag}
-                raceSeconds={raceSeconds}
-                stream={stream}
-                useWebcam={useWebcam}
-                inputDevice={inputDevice}
-                videoStatus={videoStatus}
-                errorMessage={errorMessage}
-                selectedRiderId={selectedRiderId}
-                setSelectedRiderId={setSelectedRiderId}
-                setIsSetupOpen={setIsSetupOpen}
-                playBeep={playBeep}
-                socket={connectionRef.current}
-              />
-            }
-        />
-        {false ? <Route path="/old-side" element={<div className={`mt-2 w-full min-h-screen text-zinc-100 font-sans flex flex-col relative overflow-x-hidden`} id="main-container">
-            <div className='ml-2 flex flex-row w-fit h-[73px]'>
-              <div className='p-3 bg-blue-800 flex flex-row'>
-                <div className='w-[100px] logoYcr'></div>
-
-                <div className='flex flex-col w-fit gap-2'>
-                  <div className="flex items-center gap-2">
-                    <span className="text-md font-bold text-zinc-300 uppercase tracking-widest leading-none">
-                      {sessionName || 'Motorsports timing board'}
-                    </span>
-                  </div>
-                  <h1 className="text-xl font-black italic tracking-tighter uppercase text-zinc-100 leading-tight">
-                    {raceTitle} <span className="text-zinc-300 font-normal">/ {groupName || 'No active session'}</span>
-                  </h1>
-                </div>
-              
-              </div>
-                {showBanner && (
-                  <div className="w-fit flex gap-2 h-full bg-blue-950/95 p-4">
-                    <div className='mt-auto w-fit flex gap-2 h-min'>
-                      {(control.laps && !control.ltg) && (
-                        <div className="text-3xl font-bold italic text-zinc-200 font-sans leading-none">
-                          {laps} <span className="text-lg text-zinc-300 font-normal">LAPS</span>
-                        </div>
-                      )}
-                      {(control.laps && control.ltg && flag !== 3) && (
-                      <div className="h-min">
-                        <div className="text-3xl font-bold text-zinc-200 font-sans leading-none">
-                          <span className="text-2xl text-zinc-300 font-normal mr-3">LAP</span>{laps}
-                        <span className='text-3xl text-zinc-600'> / </span>
-                        
-                          {(flag === 3) ? ' Finished' : raceLaps ? raceLaps : lapsToGo ? `${lapsToGo}` : '' } {(flag !== 3 && !raceLaps && lapsToGo) && (<span className="text-3xl text-zinc-500 font-normal">Laps to go</span>)}
-                        </div>
-                      </div>)}
-                      {(!control.laps && control.ltg || flag === 3) && (
-                      <div className="h-min">
-                        <div className="text-3xl font-bold italic text-zinc-200 font-sans leading-none">
-                          {(flag === 3) ? 'Finished' : lapsToGo } {flag !== 3 && (<span className="text-lg text-zinc-500 font-normal">Laps to go</span>)}
-                        </div>
-                      </div>
-                      )}
-                    </div>
-                  </div>  
-                )}
-            </div>
-            <div className='flex flex-col bg-zinc-900 w-fit p-3 ml-2 gap-2'>
-              <div className="text-3xl font-mono text-white flex items-center gap-1">
-                {formatRaceTimer(raceSeconds)}
-              </div>
-            </div>
-            {/* DETAILED TRACK CONSOLE - TAKE 100% ENTIRE PAGE DISPLAY */}
-            <main className="flex-1 max-w-7xl w-full mx-0 p-1 flex flex-col relative z-10 animate-fade-in" id="main-content">
-              <div className={`${control.video ? useWebcam ? videoStatus === "connected" ? "" : "hidden" : "hidden" : 'hidden'} ml-1 w-[400px] bg-slate-950 rounded-t-lg overflow-hidden border border-slate-800 shadow-2xl font-sans`}>
-                {/* Stream Header */}
-                <div className="hidden flex items-center justify-between px-3 py-1.5 bg-slate-900 border-b border-slate-800">
-                  <div className="flex items-center gap-2">
-                    <span className="relative flex h-2.5 w-2.5">
-                      {videoStatus === 'connected' && (
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                      )}
-                      <span
-                        className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
-                          videoStatus === 'connected'
-                            ? 'bg-red-600'
-                            : status === 'connecting'
-                            ? 'bg-amber-500 animate-pulse'
-                            : 'bg-slate-600'
-                        }`}
-                      />
-                    </span>
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
-                      {stream}
-                    </span>
-                  </div>
-                  <span className="text-[10px] font-mono bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded uppercase">
-                    {videoStatus}
-                  </span>
-                </div>
-
-                {/* 400px Video Viewport (16:9 Aspect Ratio) */}
-                <div className="relative aspect-video w-full flex items-center justify-center">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover"
-                  />
-
-                  {/* Status Overlays */}
-                  {videoStatus !== 'connected' &&(
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/90 p-4 text-center">
-                      {status === 'connecting' && (
-                        <p className="text-xs font-mono text-slate-400 animate-pulse">
-                          CONNECTING...
-                        </p>
-                      )}
-                      {videoStatus === 'error' && (
-                        <div className="space-y-1">
-                          <p className="text-xs font-semibold text-red-400">SIGNAL LOST</p>
-                          <p className="text-[10px] font-mono text-slate-500 max-w-[300px] truncate">
-                            {errorMessage}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-              {/* LEADERBOARD VIEW PORT - 100% WIDTH FOR MAXIMUM SPACING AND CLEAN LOOK */}
-              <section className="w-full flex flex-col gap-4" id="leaderboard-section">
-
-                  {/* REORDERING LIST WITH SPRING LAYOUT ANIMATIONS */}
-                  <div className="divide-y divide-zinc-950w-full min-h-[550px] relative" id="riders-reordering-list">
-                    <AnimatePresence initial={false}>
-                      {riders.length === 0 ? (
-                        <div className="text-zinc-100 flex flex-col gap-4 animate-fade-in animate-pulse">
-                          -
-                        </div>
-                      ) : (
-                        riders.map((rider, index) => {
-                          const showUI = {gap: false, gapTime: 0, diff: false};
-                          if(typeof rider.df === 'number') {
-                            if(rider.df >= 4 && rider.df < 5) {
-                              showUI.diff = true;
-                            }
-                          }
-                          const isLeader = index === 0;
-
-                          // Position border indicator styles
-                          const rowBorderClass = isLeader 
-                            ? "border-l-4 border-red-600 bg-zinc-900/79" 
-                            : "border-l-4 border-zinc-700 bg-zinc-900/70 ";
-
-                          const posTextStyle = isLeader 
-                            ? "text-2xl font-mono font-bold text-white tracking-tight" 
-                            : "text-2xl font-mono font-bold text-white tracking-tight";
-
-                          // Highlight flashes on overtake swap events
-                          const isRecentlyChanged = rider.changeTime && (Date.now() - rider.changeTime < 1300);
-                          const flashClass = isRecentlyChanged
-                            ? rider.changeDirection === 'up'
-                              ? 'border-l-emerald-500'
-                              : rider.changeDirection === 'down'
-                                ? 'border-l-red-500'
-                                : ''
-                            : '';
-                            const posState = isRecentlyChanged
-                            ? rider.changeDirection === 'up'
-                              ? 'bg-emerald-950/60 border-l-emerald-500 transition-all duration-300'
-                              : rider.changeDirection === 'down'
-                                ? 'bg-red-950/60 border-l-red-500 transition-all duration-300'
-                                : ''
-                            : '';
-
-                          return (
-                            <motion.div
-                              layoutId={`rider-row-${rider.id}`}
-                              key={rider.id}
-                              className={`${showUI.diff ? 'mt-8 ' : ''}my-1 ${control.laps ? '' : ''} w-full flex items-center flex-row border-transparent pointer border-l-4 ${flashClass}`}
-                              id={`rider-row-${rider.id}`}
-                              onClick={() => {
-                                setSelectedRiderId(rider.id === selectedRiderId ? null : rider.id);
-                                setIsSetupOpen(true); // open setup pane to modify/inspect selected rider
-                                playBeep('tick');
-                              }}
-                            >
-                              <div key={`rider-${rider.id}`} className={`flex items-center grid-cols-8 w-[400px] h-full grid border-zinc-700 bg-zinc-950/90`}>
-                                {/* POSITION */}
-                                <div className="col-span-1 flex items-center justify-center">
-                                  {/* Delta arrows */}
-                                  <div className="">
-                                    {rider.changeDirection === 'up' && (
-                                      <ChevronUp className="w-4 h-4 text-emerald-500" />
-                                    )}
-                                    {rider.changeDirection === 'down' && (
-                                      <ChevronDown className="w-4 h-4 text-red-500" />
-                                    )}
-                                    {(!rider.changeDirection || rider.changeDirection !== 'up' && rider.changeDirection !== 'down') && (
-                                      <span className="text-zinc-650 text-xl font-bold" id={`rider-pos-${rider.id}`}>
-                                    {`${rider.pos}`}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {/* <span className={`${posTextStyle}`} id={`rider-pos-${rider.id}`}>
-                                    {`${(index + 1).toString()}`}
-                                  </span> */}
-                                </div>
-                                
-                                {/* RIDER NAME / TEAM */}
-                                <div className="col-span-5 pl-4 flex items-center h-full bg-linear-to-r from-blue-950/70 to-black/0">
-                                  <div className="flex flex-col">
-                                    <div className="flex items-center gap-2.5">
-                                      <span className="text-lg font-black uppercase tracking-tight leading-none">
-                                        {`${fitName(rider.nam, 8)}`}
-                                      </span>
-                                    {(rider.changeDirection === 'steady' && rider.if === true) && (
-                                      <span className="text-zinc-650 text-3xl font-bold">🏁</span>
-                                    )}
-                                      
-                                      {/* {rider.ibt && (
-                                        <span className="text-[8px] bg-purple-950 text-purple-300 font-extrabold px-1.5 py-0.5 rounded border border-purple-600/40 flex items-center gap-0.5 uppercase tracking-wider leading-none">
-                                          <Sparkles className="w-2.5 h-2.5 shrink-0" /> RECORD
-                                        </span>
-                                      )} */}
-                                    </div>
-                                    {rider.cb && (
-                                      <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mt-1.5 leading-none truncate font-sans">
-                                        {rider.cb}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-
-                                
-                                {/* VEHICLE NO */}
-                                <div className="col-span-2 my-1 rounded-l-lg bg-linear-to-r from-blue-700/100 to-blue-700/70 text-center">
-                                  <span className="text-xl italic tracking-tighter text-white select-none font-sans">
-                                    {rider.no}
-                                  </span>
-                                </div> 
-                              </div>
-                              
-                              <div className='flex flex-row'>
-                                {/* BEST & LAST TIMINGS */}
-                                {(rider.df || rider.gp) && (
-                                <div className={`${control.time ? "" : "hidden"} w-[110px] text-right flex flex-col justify-center bg-zinc-950/90 border border-zinc-800 px-2 py-0.5 gap-1`}>
-                                  <div className="font-mono text-xl font-semibold text-zinc-100 tracking-tight leading-none">
-                                    {isLeader ? control.gap ? 'INTERVAL' : 'GAP'  : control.gap ? rider.gp : control.diff ? rider.df : rider.df ? rider.dfCl : "-"}
-                                  </div>
-                                  {/* <div className="text-[10px] text-zinc-500 font-mono mt-1.5 leading-none uppercase tracking-wider flex items-center justify-end gap-1">
-                                    <span className="font-bold">BEST:</span> {rider.btTm || "--:--.---"}
-                                    {rider.ls !== undefined && (
-                                      <span className="text-zinc-650 bg-zinc-950 px-1 py-0.2 rounded font-normal text-[8px] border border-zinc-850 ml-1">laps{rider.ls}</span>
-                                    )}
-                                  </div> */}
-                                </div>)}
-                                {rider.btTm && (
-                                <div className={`${control.best ? '' : 'hidden'} text-left flex flex-row text-lg font-black leading-none uppercase tracking-wider flex items-center justify-end gap-1 border-zinc-800 rounded px-2 bg-zinc-950/90 border border-zinc-800`}>
-                                  <span className="font-bold">BEST:</span> {rider.btTm}
-                                  {/* {rider.ls !== undefined && (
-                                    <span className="text-zinc-650 bg-zinc-950 px-1 py-0.2 rounded font-normal text-[8px] border border-zinc-850 ml-1">laps{rider.ls}</span>
-                                  )} */}
-                                </div>)}
-                              </div>
-                              
-                            </motion.div>
-                          );
-                        })
-                      )}
-                    </AnimatePresence>
-                  </div>
-              </section>
-
-            </main>
-          </div>} /> : null}
         <Route 
           path="/sideposition" 
           element={<Navigate to="/sidePosition" replace />} 

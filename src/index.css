@@ -1,6 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Orbitron:wght@400;500;600;700;900&display=swap');
 @import "tailwindcss";
-
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
@@ -89,5 +88,19 @@
     background-size: cover; /* or contain */
     background-position: center;
     opacity:1;
+  }
+  .bgbiruYamaha{
+    background-color: #0a2d81;
+  }
+  .textbiruYamaha{
+    color: #0a2d81;
+  }
+  .numberFont{
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 800;
+  }
+  .numberFontLighter{
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 600;
   }
 }

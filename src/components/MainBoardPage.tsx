@@ -612,6 +612,18 @@ export const MainBoardPage: React.FC<MainBoardPageProps> = ({
                 {/* Grid Configuration */}
                 <div className="space-y-3 bg-zinc-950/40 p-4 border border-zinc-800 rounded-xl">
                   <h3 className="text-xs font-black tracking-widest uppercase text-zinc-400 italic">Race Grid Configuration</h3>
+                  
+                  <div className="pt-1">
+                    <a
+                      href="/manual"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-2.5 px-3 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 transition-colors shadow-md shadow-blue-950/40"
+                    >
+                      <Terminal className="w-4 h-4" /> Open Manual Timing Desk (/manual)
+                    </a>
+                  </div>
+
                   <div className="space-y-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] text-zinc-500 uppercase font-black tracking-wider">Number of Race Laps</label>

@@ -20,7 +20,10 @@ let raceState = {
   stats: null as any,
   controlAction: {},
   isTimerRunning: false,
-  raceSeconds: 0
+  raceSeconds: 0,
+  isManualMode: false,
+  manualRiders: [] as any[],
+  manualSessionInfo: null as any,
 };
 const allClients = new Set<WSClient>();
 
@@ -289,13 +292,31 @@ async function startServer() {
             }
           }
         }
+        
+        else if (message.type === 'customBanner') {
+          broadcastToAll({ type: "customBanner", text:message.text });
+        }
         else if (message.type === 'control') {
           raceState.controlAction = {
             ...raceState.controlAction, // 1. Spread out all existing keys (e.g., { laps: true })
             ...message.action           // 2. Spread the new keys, overwriting existing matching ones (e.g., { time: true })
           };
-          console.log(`[WS Server] Control action broadcast:`, raceState.controlAction );
+          console.log(`[WS Server] broadcast:`, raceState.controlAction );
           broadcastToAll({ type: "control", action:raceState.controlAction });
+        }
+        else if(message.type === 'macroPad'){
+          broadcastToAll({type:"macroPad", trigger:message.params});
+          sendToClient(ws, { type: "macroPad", trigger:message.params});
+        }
+        else if(message.type === 'setRaceLaps'){
+          broadcastToAll({type:"setRaceLaps", laps:message.laps});
+          sendToClient(ws, { type: "setRaceLaps", laps:message.laps });
+        }
+        else if(message.type === 'startingGrid'){
+          if(message.next){
+            broadcastToAll({type:"startingGrid", next:message.next});
+            sendToClient(ws, { type: "startingGrid", next:message.next });
+          }
         }
         else if(message.type === 'inputDevice'){
           broadcastToAll({type:"inputDevice", inputDevice:message});
@@ -309,12 +330,44 @@ async function startServer() {
           broadcastToAll({type:"askInputDevices"});
           sendToClient(ws, { type: "askInputDevices"});
         }
+        else if(message.type === 'askFinishedPages'){
+          broadcastToAll({type:"askFinishedPages"});
+          sendToClient(ws, { type: "askFinishedPages"});
+        }
+        else if(message.type === 'finishedPages'){
+          broadcastToAll({type: "finishedPages",pages:message.pages});
+          sendToClient(ws, {type: "finishedPages", pages: message.pages});
+        }
+        else if(message.type === 'finishedRacerPage'){
+          broadcastToAll({type: "finishedRacerPage",page:message.page});
+          sendToClient(ws, {type: "finishedRacerPage", page: message.page});
+        }
         else if(message.type === 'videoURL'){
-          broadcastToAll({type:"video",url:message});
+          broadcastToAll({type:"video",url:message.url});
           sendToClient(ws, { type: "video", url:message });
         }
         else if (message.type === 'syncState'){
           sendToClient(ws, { type: "syncState", raceState });
+          if (raceState.isManualMode) {
+            sendToClient(ws, {
+              type: "manualDataSync",
+              isManualMode: raceState.isManualMode,
+              riders: raceState.manualRiders,
+              sessionInfo: raceState.manualSessionInfo
+            });
+          }
+        }
+        else if (message.type === 'manualDataSync') {
+          raceState.isManualMode = !!message.isManualMode;
+          if (message.riders) raceState.manualRiders = message.riders;
+          if (message.sessionInfo) raceState.manualSessionInfo = message.sessionInfo;
+          console.log(`[WS Server] Manual Mode Sync: enabled=${raceState.isManualMode}, riders=${raceState.manualRiders.length}`);
+          broadcastToAll({
+            type: "manualDataSync",
+            isManualMode: raceState.isManualMode,
+            riders: raceState.manualRiders,
+            sessionInfo: raceState.manualSessionInfo
+          });
         }
         else if (message.type === 'videoStatus'){
           broadcastToAll({type:"videoStatus", status:message.status});
