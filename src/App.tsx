@@ -542,6 +542,7 @@ export default function App() {
       const data = await res.json();
       if(data)console.log("Initial data fetched", data);
       
+      setRiders([]); // clear any existing riders before fetching new data
       if (data.eNam) setRaceTitle(data.eNam);
       if (data.rnNam) setSessionName(data.rnNam);
       if (data.gNam) setGroupName(data.gNam);
@@ -969,7 +970,6 @@ export default function App() {
 
     localStorage.setItem('speedhive_url', urlToUse);
     setAutoSimulate(false); // disable simulator on real speedhive load
-    setRiders([]); // clear any existing riders before fetching new data
     // 1. Load initial timing tables
     if (eventId) {
       await fetchInitialData(eventId, sessionId);
