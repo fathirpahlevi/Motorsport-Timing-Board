@@ -7,8 +7,8 @@ import { AddRiderModal } from './manualRider';
 interface SyncState {
     laps?: boolean;
     time?: boolean;
-    input: boolean;
-    rtmp: boolean;
+    input?: boolean;
+    rtmp?: boolean;
     [key: string]: boolean | undefined;
 }
 

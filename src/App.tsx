@@ -121,7 +121,7 @@ function fitName(name: string, maxLength: number) {
   // Attach WebRTC MediaStream to the video element
 export default function App() {
   const [speedhiveUrl, setSpeedhiveUrl] = useState<string>();
-  const resultData = useRef<RaceEventData>;
+  const resultData = useRef<RaceEventData | null>(null);
   const [raceLaps, setRaceLaps] = useState<number>(0);
   const [isClosedLoop, setIsClosedLoop] = useState<boolean>(() => {
     return localStorage.getItem('is_closed_loop') !== 'false';
@@ -152,7 +152,7 @@ export default function App() {
   const [errorMessageControl, setErrorMessageControl] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [control, setControl] = useState<ControlState>({laps:false,ltg:false,input:false,rtmp:false});
-  const controlRef = useRef<Object>({});
+  const controlRef = useRef<ControlState>({laps:false,ltg:false,input:false,rtmp:false});
   
   useEffect(() => {
     controlRef.current = control;
@@ -1195,7 +1195,7 @@ export default function App() {
     });
     playBeep('tick');
   };
-  const sortedRiders = [...riders].sort((a, b) => (a.pos || 0) - (b.pos || 0));
+  const sortedRiders = [...riders].sort((a, b) => (Number(a.pos) || a.lbpos || 0) - (Number(b.pos) || b.lbpos || 0));
 
 
   return (
@@ -1233,7 +1233,7 @@ export default function App() {
           path="/trophy"
           element={
             <TrophyPage
-              data={resultData}
+              data={resultData.current || undefined}
               riders={riders}
               raceTitle={raceTitle}
               groupName={groupName}
@@ -1245,7 +1245,7 @@ export default function App() {
           path="/result"
           element={
             <RaceResultPage
-              data={resultData}
+              data={resultData.current || undefined}
               riders={riders}
               raceTitle={raceTitle}
               groupName={groupName}
@@ -1365,7 +1365,7 @@ export default function App() {
               setGroupName={setGroupName}
               setFlag={setFlag}
               setLatestAnnouncement={setLatestAnnouncement}
-              setConnectionStatus={setConnectionStatus}
+              setConnectionStatus={(c: any) => setConnectionStatus(c)}
               addWebSocketLog={addWebSocketLog}
               autoSimulate={autoSimulate}
               setAutoSimulate={setAutoSimulate}
@@ -1385,7 +1385,7 @@ export default function App() {
               editingRider={editingRider}
               setEditingRider={setEditingRider}
               handleUpdateRiderSpecs={handleUpdateRiderSpecs}
-              handleDeleteRider={handleDeleteRider}
+              handleDeleteRider={(id: string) => handleDeleteRider(id, '')}
               isConsoleOpen={isConsoleOpen}
               setIsConsoleOpen={setIsConsoleOpen}
               webSocketLogs={webSocketLogs}

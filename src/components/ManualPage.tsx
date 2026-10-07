@@ -23,6 +23,7 @@
     } from 'lucide-react';
     import { RiderResult } from '../types';
     import { recalculateGaps } from '../data';
+    import { StartingGridImporter } from './StartingGridImporter';
 
     interface ManualPageProps {
     riders: RiderResult[];
@@ -141,6 +142,64 @@
     const handleUpdateRaceInfo = (e: React.FormEvent) => {
         e.preventDefault();
         broadcastManualData(isManualMode, riders);
+    };
+
+    // Handle importing starting grid racers from CSV or Gemini screenshot OCR
+    const handleApplyImportedRiders = (
+        newRiders: RiderResult[],
+        mode: 'replace' | 'append',
+        metadata?: { raceTitle?: string; groupName?: string; sessionName?: string }
+    ) => {
+        let updatedRiders: RiderResult[];
+        if (mode === 'replace') {
+            updatedRiders = newRiders;
+        } else {
+            // Append
+            const startPos = riders.length;
+            const reindexedNew = newRiders.map((r, i) => ({
+                ...r,
+                lbpos: startPos + i + 1,
+                pos: (startPos + i + 1).toString(),
+                pCl: (startPos + i + 1).toString(),
+            }));
+            updatedRiders = [...riders, ...reindexedNew];
+        }
+
+        const finalRiders = recalculateGaps(updatedRiders);
+        setRiders(finalRiders);
+
+        let newRaceTitle = raceTitle;
+        let newGroupName = groupName;
+        let newSessionName = sessionName;
+
+        if (metadata) {
+            if (metadata.raceTitle) {
+                newRaceTitle = metadata.raceTitle;
+                setRaceTitle(metadata.raceTitle);
+            }
+            if (metadata.groupName) {
+                newGroupName = metadata.groupName;
+                setGroupName(metadata.groupName);
+            }
+            if (metadata.sessionName) {
+                newSessionName = metadata.sessionName;
+                setSessionName(metadata.sessionName);
+            }
+        }
+
+        // Automatically ensure manual mode is active and broadcast immediately
+        setIsManualMode(true);
+        broadcastManualData(true, finalRiders, {
+            raceTitle: newRaceTitle,
+            groupName: newGroupName,
+            sessionName: newSessionName,
+        });
+    };
+
+    // Direct toggle / set manual mode
+    const handleDirectSetManualMode = (enabled: boolean) => {
+        setIsManualMode(enabled);
+        broadcastManualData(enabled, riders);
     };
 
     // Add new racer
@@ -433,6 +492,17 @@
                 )}
             </button>
             </div>
+
+            {/* STARTING GRID IMPORTER (CSV & GEMINI MULTIMODAL SCREENSHOTS) */}
+            <StartingGridImporter
+                currentRiders={riders}
+                onApplyRiders={handleApplyImportedRiders}
+                isManualMode={isManualMode}
+                onToggleManualMode={handleDirectSetManualMode}
+                raceTitle={raceTitle}
+                groupName={groupName}
+                sessionName={sessionName}
+            />
 
             {/* EVENT & SESSION INFO EDITORS */}
             <form onSubmit={handleUpdateRaceInfo} className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-6 shadow-xl space-y-4">

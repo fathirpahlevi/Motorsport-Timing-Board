@@ -1,6 +1,6 @@
     import React, { useState } from 'react';
-    import { RiderResult } from './types';
-    import { createManualRider, ManualRiderInput } from './utils';
+    import { RiderResult } from '../types';
+    import { createManualRider, ManualRiderInput } from '../data';
 
     interface AddRiderModalProps {
     isOpen: boolean;

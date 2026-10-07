@@ -1,10 +1,20 @@
+import "dotenv/config";
 import express from "express";
 import path from "path";
 import http from "http";
 import { WebSocketServer, WebSocket as WSClient } from "ws";
 import { HubConnectionBuilder, HubConnection } from "@microsoft/signalr";
 import { createServer as createViteServer } from "vite";
-import { error } from "console";
+import { GoogleGenAI, Type } from "@google/genai";
+
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    }
+  }
+});
 
 interface SessionSubscription {
   connection: HubConnection;
@@ -40,7 +50,139 @@ async function startServer() {
   // Keep track of active SignalR connections to avoid duplicate feeds
   const activeSignalRConnections = new Map<string, SessionSubscription>();
 
-  app.use(express.json());
+  // Allow larger payload for screenshot images
+  app.use(express.json({ limit: "50mb" }));
+  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+  // Multimodal Gemini endpoint to convert screenshots of starting grid
+  app.post("/api/extract-starting-grid", async (req, res) => {
+    try {
+      const { images, promptHint } = req.body;
+      if (!images || !Array.isArray(images) || images.length === 0) {
+        return res.status(400).json({ success: false, error: "No images provided. Please upload at least one image." });
+      }
+
+      if (!process.env.GEMINI_API_KEY) {
+        return res.status(500).json({
+          success: false,
+          error: "Gemini API key is not configured on the server. Please check the Secrets settings."
+        });
+      }
+
+      // Convert image payloads to Gemini parts
+      const imageParts = images.map((img: { mimeType?: string; data: string }, index: number) => {
+        let base64Data = img.data;
+        let mimeType = img.mimeType || "image/png";
+
+        if (base64Data.includes(";base64,")) {
+          const parts = base64Data.split(";base64,");
+          const matchMime = parts[0].match(/data:(.*?);/);
+          if (matchMime) mimeType = matchMime[1];
+          base64Data = parts[1];
+        }
+
+        return {
+          inlineData: {
+            mimeType,
+            data: base64Data,
+          },
+        };
+      });
+
+      const promptText = `You are an expert motorsport timing official and starting grid data extraction specialist.
+Analyze the provided starting grid screenshot(s) / document image(s) (${images.length} image(s) provided).
+Extract all racers/riders along with any race/event title metadata visible.
+
+Extract:
+1. Event title / Championship name (if visible)
+2. Class / Group name (e.g. Novice, Expert, Moto3, TMAX, Bebek, etc., if visible)
+3. Session title (e.g. Starting Grid, Race 1, etc., if visible)
+4. Starting Grid Racers in order of their starting grid position:
+   - pos: Starting grid position number (integer 1, 2, 3...)
+   - no: Bike/racer number (string e.g. "46", "99", "12")
+   - nam: Racer full name
+   - cb: Team name or club or sponsor (if present, otherwise empty string)
+   - btTm: Best qualifying/lap time if present (e.g. "1:42.123", otherwise empty string)
+   - tTm: Gap or total time if present (otherwise empty string)
+
+Important guidelines:
+- If there are multiple images (pages, columns, or sequential screenshots), merge all racers into a single sequential starting grid (P1, P2, P3, ...).
+- Maintain correct starting grid order. If explicit position numbers are missing, assign sequential positions 1, 2, 3... based on visual grid layout.
+- Clean up any OCR noise in names, numbers, and times.
+${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.8-flash",
+        contents: {
+          parts: [
+            ...imageParts,
+            { text: promptText },
+          ],
+        },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              raceTitle: { type: Type.STRING, description: "Event or championship title if visible" },
+              groupName: { type: Type.STRING, description: "Race class or group name if visible" },
+              sessionName: { type: Type.STRING, description: "Session name if visible" },
+              racers: {
+                type: Type.ARRAY,
+                description: "List of starting grid racers in position order",
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    pos: { type: Type.INTEGER, description: "Grid position number (1, 2, 3...)" },
+                    no: { type: Type.STRING, description: "Bike / racer number" },
+                    nam: { type: Type.STRING, description: "Racer name" },
+                    cb: { type: Type.STRING, description: "Team or Club name" },
+                    btTm: { type: Type.STRING, description: "Best lap time or qualifying time" },
+                    tTm: { type: Type.STRING, description: "Total time or gap" },
+                  },
+                  required: ["pos", "no", "nam"],
+                },
+              },
+            },
+            required: ["racers"],
+          },
+        },
+      });
+
+      const responseText = response.text;
+      if (!responseText) {
+        throw new Error("No response returned from Gemini API");
+      }
+
+      const parsedData = JSON.parse(responseText);
+      res.json({
+        success: true,
+        data: parsedData,
+      });
+    } catch (err: any) {
+      console.error("[Gemini Extraction Error]", err);
+      res.status(500).json({
+        success: false,
+        error: err.message || "Failed to extract starting grid data from images.",
+      });
+    }
+  });
+
+  // REST API for manual riders persistence
+  app.post("/api/manual-riders", (req, res) => {
+    const newRider = req.body;
+    if (newRider) {
+      raceState.manualRiders = [...(raceState.manualRiders || []), newRider];
+      raceState.isManualMode = true;
+      broadcastToAll({
+        type: "manualDataSync",
+        isManualMode: true,
+        riders: raceState.manualRiders,
+        sessionInfo: raceState.manualSessionInfo,
+      });
+    }
+    res.json({ success: true, rider: newRider });
+  });
 
   // Proxy route for Speedhive initial data to avoid CORS issues
   app.get("/api/speedhive-proxy", async (req, res) => {
