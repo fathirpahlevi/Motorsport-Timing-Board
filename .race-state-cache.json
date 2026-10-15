@@ -1,0 +1,18 @@
+{
+  "savedID": {
+    "eventId": "",
+    "sessionId": ""
+  },
+  "isManualMode": false,
+  "manualRiders": [],
+  "manualSessionInfo": null,
+  "lowerThird": {
+    "visible": true,
+    "position": "center",
+    "selectedRiderIds": [
+      "r_189"
+    ]
+  },
+  "sessionInfo": null,
+  "controlAction": {}
+}
