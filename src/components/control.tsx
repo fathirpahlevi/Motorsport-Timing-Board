@@ -658,7 +658,43 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
             Reset Display
             </button> */}
 
-            <div className="mt-6 p-3 bg-gray-50 rounded-md text-sm text-gray-600 border border-gray-200">
+            <div className="mt-6 p-4 bg-zinc-900 border border-zinc-800 rounded-xl space-y-3">
+                <span className="text-xs font-black uppercase tracking-wider text-amber-400 font-mono block">
+                    Broadcast Overlays & Controllers
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+                    <a
+                        href="/lowerthirdcontrol"
+                        className="p-2.5 bg-amber-400 text-zinc-950 font-bold rounded-lg text-center hover:bg-amber-300 transition-colors uppercase"
+                    >
+                        Lower Third Control
+                    </a>
+                    <a
+                        href="/lowerthird"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
+                    >
+                        Lower Third Overlay
+                    </a>
+                    <a
+                        href="/manual"
+                        className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
+                    >
+                        Manual Grid Importer
+                    </a>
+                    <a
+                        href="/sideposition"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
+                    >
+                        Side Position Overlay
+                    </a>
+                </div>
+            </div>
+
+            <div className="mt-4 p-3 bg-gray-50 rounded-md text-sm text-gray-600 border border-gray-200">
                 <span className="font-semibold text-gray-700">Last Action:</span> {localStatus}
             </div>
         </div>

@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import basicAuth from 'express-basic-auth';
 import path from "path";
+import fs from "fs";
 import http from "http";
 import { WebSocketServer, WebSocket as WSClient } from "ws";
 import { HubConnectionBuilder, HubConnection } from "@microsoft/signalr";
@@ -35,10 +36,53 @@ let raceState = {
   isManualMode: false,
   manualRiders: [] as any[],
   manualSessionInfo: null as any,
+  lowerThird: {
+    visible: false,
+    position: 'left' as 'left' | 'center' | 'right',
+    selectedRiderIds: [] as string[],
+  },
 };
 const allClients = new Set<WSClient>();
 
+const STATE_CACHE_FILE = path.join(process.cwd(), '.race-state-cache.json');
+
+function saveRaceStateCache() {
+  try {
+    const toSave = {
+      savedID,
+      isManualMode: raceState.isManualMode,
+      manualRiders: raceState.manualRiders,
+      manualSessionInfo: raceState.manualSessionInfo,
+      lowerThird: raceState.lowerThird,
+      sessionInfo: raceState.sessionInfo,
+      controlAction: raceState.controlAction,
+    };
+    fs.writeFileSync(STATE_CACHE_FILE, JSON.stringify(toSave, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('[Cache] Failed to save state to cache file:', e);
+  }
+}
+
+function loadRaceStateCache() {
+  try {
+    if (fs.existsSync(STATE_CACHE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(STATE_CACHE_FILE, 'utf-8'));
+      if (data.savedID) savedID = data.savedID;
+      if (typeof data.isManualMode === 'boolean') raceState.isManualMode = data.isManualMode;
+      if (Array.isArray(data.manualRiders) && data.manualRiders.length > 0) raceState.manualRiders = data.manualRiders;
+      if (data.manualSessionInfo) raceState.manualSessionInfo = data.manualSessionInfo;
+      if (data.lowerThird) raceState.lowerThird = data.lowerThird;
+      if (data.sessionInfo) raceState.sessionInfo = data.sessionInfo;
+      if (data.controlAction) raceState.controlAction = data.controlAction;
+      console.log(`[Cache] Loaded race state from cache. ManualMode=${raceState.isManualMode}, ManualRiders=${raceState.manualRiders.length}`);
+    }
+  } catch (e) {
+    console.error('[Cache] Failed to load state cache:', e);
+  }
+}
+
 async function startServer() {
+  loadRaceStateCache();
   const app = express();
   const PORT = 3000;
 
@@ -326,18 +370,37 @@ ${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
     allClients.add(ws);
 
     // Send the current full state immediately to the newly connected client
-    // sendToClient(ws, {
-    //   type: "syncState",
-    //   eventId: raceState.eventId || savedID.eventId,
-    //   sessionId: raceState.sessionId || savedID.sessionId,
-    //   results: raceState.results,
-    //   sessionInfo: raceState.sessionInfo,
-    //   announcement: raceState.announcement,
-    //   stats: raceState.stats,
-    //   controlAction: raceState.controlAction,
-    //   isTimerRunning: raceState.isTimerRunning,
-    //   raceSeconds: raceState.raceSeconds
-    // });
+    sendToClient(ws, {
+      type: "syncState",
+      raceState,
+      eventId: raceState.eventId || savedID.eventId,
+      sessionId: raceState.sessionId || savedID.sessionId,
+      results: raceState.results,
+      sessionInfo: raceState.sessionInfo,
+      announcement: raceState.announcement,
+      stats: raceState.stats,
+      controlAction: raceState.controlAction,
+      isTimerRunning: raceState.isTimerRunning,
+      raceSeconds: raceState.raceSeconds
+    });
+
+    if (raceState.isManualMode || raceState.manualRiders.length > 0) {
+      sendToClient(ws, {
+        type: "manualDataSync",
+        isManualMode: raceState.isManualMode,
+        riders: raceState.manualRiders,
+        sessionInfo: raceState.manualSessionInfo
+      });
+    }
+
+    if (raceState.lowerThird) {
+      sendToClient(ws, {
+        type: "lowerThirdControl",
+        visible: raceState.lowerThird.visible,
+        position: raceState.lowerThird.position,
+        selectedRiderIds: raceState.lowerThird.selectedRiderIds,
+      });
+    }
 
     // If there is already an active session, notify them to switch/subscribe
     if (savedID.sessionId) {
@@ -505,11 +568,35 @@ ${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
               sessionInfo: raceState.manualSessionInfo
             });
           }
+          if (raceState.lowerThird) {
+            sendToClient(ws, {
+              type: "lowerThirdControl",
+              visible: raceState.lowerThird.visible,
+              position: raceState.lowerThird.position,
+              selectedRiderIds: raceState.lowerThird.selectedRiderIds,
+            });
+          }
+        }
+        else if (message.type === 'lowerThirdControl') {
+          raceState.lowerThird = {
+            visible: !!message.visible,
+            position: message.position || 'left',
+            selectedRiderIds: Array.isArray(message.selectedRiderIds) ? message.selectedRiderIds : [],
+          };
+          saveRaceStateCache();
+          console.log(`[WS Server] LowerThird Control: visible=${raceState.lowerThird.visible}, pos=${raceState.lowerThird.position}, count=${raceState.lowerThird.selectedRiderIds.length}`);
+          broadcastToAll({
+            type: "lowerThirdControl",
+            visible: raceState.lowerThird.visible,
+            position: raceState.lowerThird.position,
+            selectedRiderIds: raceState.lowerThird.selectedRiderIds,
+          });
         }
         else if (message.type === 'manualDataSync') {
           raceState.isManualMode = !!message.isManualMode;
           if (message.riders) raceState.manualRiders = message.riders;
           if (message.sessionInfo) raceState.manualSessionInfo = message.sessionInfo;
+          saveRaceStateCache();
           console.log(`[WS Server] Manual Mode Sync: enabled=${raceState.isManualMode}, riders=${raceState.manualRiders.length}`);
           broadcastToAll({
             type: "manualDataSync",

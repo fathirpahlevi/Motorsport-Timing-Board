@@ -39,7 +39,7 @@ import {
   ChevronUp,
   ChevronDown
 } from 'lucide-react';
-import { RiderResult, SignalRPacket, ControlState, RaceEventData, RacerResult } from './types';
+import { RiderResult, SignalRPacket, ControlState, RaceEventData, RacerResult, LowerThirdState } from './types';
 import { INITIAL_RIDERS, recalculateGaps, parseLapTimeToMs, formatLapTime } from './data';
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { RaceResultPage } from './components/resultPage';
@@ -50,6 +50,8 @@ import { MainBoardPage } from './components/MainBoardPage';
 import { StartingGrid } from './components/startingGrid';
 import { WebRTCVideoPlayer } from './components/rtmpVideo';
 import { ManualPage } from './components/ManualPage';
+import { LowerThirdPage } from './components/LowerThirdPage';
+import { LowerThirdControlPage } from './components/LowerThirdControlPage';
 
 import { ListSelectInput, SelectOption } from './components/lists';
 
@@ -249,14 +251,46 @@ export default function App() {
   // Scrolling Announcements from hub
   const [latestAnnouncement, setLatestAnnouncement] = useState<string>('');
 
+  const defaultInitialRiders = useMemo(() => recalculateGaps(INITIAL_RIDERS), []);
+  const liveSpeedhiveRidersRef = useRef<RiderResult[]>([]);
+  const hasLiveSpeedhiveDataRef = useRef<boolean>(false);
+  const manualRidersRef = useRef<RiderResult[]>([]);
+
+  // Lower Third Graphics State
+  const [lowerThirdState, setLowerThirdState] = useState<LowerThirdState>({
+    visible: false,
+    position: 'left',
+    selectedRiderIds: [],
+  });
+
   // Active Riders / Telemetry grid
-  const [isManualMode, setIsManualMode] = useState<boolean>(false);
-  const isManualModeRef = useRef<boolean>(false);
+  const [isManualMode, setIsManualMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('manual_mode_active') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const isManualModeRef = useRef<boolean>(isManualMode);
   useEffect(() => {
     isManualModeRef.current = isManualMode;
+    try {
+      localStorage.setItem('manual_mode_active', isManualMode ? 'true' : 'false');
+    } catch {}
   }, [isManualMode]);
 
   const [riders, setRiders] = useState<RiderResult[]>(() => {
+    try {
+      const savedManual = localStorage.getItem('manual_grid_riders');
+      const isManual = localStorage.getItem('manual_mode_active') === 'true';
+      if (isManual && savedManual) {
+        const parsed = JSON.parse(savedManual);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          manualRidersRef.current = parsed;
+          return parsed;
+        }
+      }
+    } catch (e) {}
     return recalculateGaps(INITIAL_RIDERS);
   });
 
@@ -431,7 +465,6 @@ export default function App() {
   }, [signalRLogs]);
   
   const injectSignalRPacket = (packetObj: SignalRPacket) => {
-    if (isManualModeRef.current) return; // Ignore Speedhive live updates when manual mode is active
     if (!packetObj || !Array.isArray(packetObj.results)) {
       addWebSocketLog('system', "❌ SignalR Error: results is not a valid array");
       return;
@@ -520,6 +553,14 @@ export default function App() {
         playBeep('tick');
       }
 
+      liveSpeedhiveRidersRef.current = finalPack;
+      hasLiveSpeedhiveDataRef.current = true;
+
+      if (isManualModeRef.current) {
+        // If manual mode is active, do not overwrite riders with live feed
+        return prevRiders;
+      }
+
       return finalPack;
     });
   };
@@ -542,7 +583,9 @@ export default function App() {
       const data = await res.json();
       if(data)console.log("Initial data fetched", data);
       
-      setRiders([]); // clear any existing riders before fetching new data
+      if (!isManualModeRef.current) {
+        setRiders([]); // clear riders only in live mode
+      }
       if (data.eNam) setRaceTitle(data.eNam);
       if (data.rnNam) setSessionName(data.rnNam);
       if (data.gNam) setGroupName(data.gNam);
@@ -574,7 +617,12 @@ export default function App() {
         };
       });
 
-      setRiders(finalInitialData);
+      liveSpeedhiveRidersRef.current = finalInitialData;
+      hasLiveSpeedhiveDataRef.current = true;
+
+      if (!isManualModeRef.current) {
+        setRiders(finalInitialData);
+      }
 
       const bestRider = finalInitialData.find(r => r.ibt || r.btTm === data.btLpTim);
       if (bestRider) {
@@ -651,7 +699,25 @@ export default function App() {
             sessionId: ""
           }));
         }
-        
+
+        // Request full state synchronization
+        socket.send(JSON.stringify({ type: "syncState" }));
+
+        // If local manual mode was active, send manualDataSync to ensure server has our grid
+        try {
+          const savedManual = localStorage.getItem('manual_grid_riders');
+          const isManual = localStorage.getItem('manual_mode_active') === 'true';
+          if (isManual && savedManual) {
+            const parsed = JSON.parse(savedManual);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              socket.send(JSON.stringify({
+                type: 'manualDataSync',
+                isManualMode: true,
+                riders: parsed,
+              }));
+            }
+          }
+        } catch (e) {}
       };
 
       socket.onmessage = (event) => {
@@ -870,52 +936,124 @@ export default function App() {
           }
           else if (message.type === "syncState") {
             addWebSocketLog('system', `📡 Received full race state sync from server.`);
-            // console.log("Received full race state sync from server. control", message);
-            if (message.raceState.sessionId && message.raceState.sessionId !== sessionIdRef.current) {
-              setSessionId(message.raceState.sessionId);
-            }
-            if (message.raceState.eventId) {
-              setEventId(message.raceState.eventId);
-            }
-            if (message.raceState.results && Array.isArray(message.raceState.results.results)) {
-              injectSignalRPacket(message.raceState.results);
-            }
-            if (message.raceState.sessionInfo) {
-              const data = message.raceState.sessionInfo;
-              if (data.eNam) setRaceTitle(data.eNam);
-              if (data.rnNam) setSessionName(data.rnNam);
-              if (data.gNam) setGroupName(data.gNam);
-              if (data.btLpTim) setSessionBestTime(data.btLpTim);
-              // if (data.ls) setRaceLaps(data.ls);
-              if (data.ls) setLaps(data.ls);
-              if (data.lsTg) setLapsToGo(data.lsTg);
-              if (typeof data.f === "number") setFlag(data.f);
-            }
-            if (message.raceState.announcement) {
-              setLatestAnnouncement(message.raceState.announcement);
-            }
-            if (message.raceState.stats) {
-              const data = message.raceState.stats;
-              if (data.bestLapTime) {
-                setSessionBestTime(data.bestLapTime);
-                if (data.bestLapDriverName) {
-                  setSessionBestRider(data.bestLapDriverName);
+            if (message.raceState) {
+              if (message.raceState.sessionId && message.raceState.sessionId !== sessionIdRef.current) {
+                setSessionId(message.raceState.sessionId);
+              }
+              if (message.raceState.eventId) {
+                setEventId(message.raceState.eventId);
+              }
+              if (message.raceState.results && Array.isArray(message.raceState.results.results)) {
+                injectSignalRPacket(message.raceState.results);
+              }
+              if (message.raceState.sessionInfo) {
+                const data = message.raceState.sessionInfo;
+                if (data.eNam) setRaceTitle(data.eNam);
+                if (data.rnNam) setSessionName(data.rnNam);
+                if (data.gNam) setGroupName(data.gNam);
+                if (data.btLpTim) setSessionBestTime(data.btLpTim);
+                // if (data.ls) setRaceLaps(data.ls);
+                if (data.ls) setLaps(data.ls);
+                if (data.lsTg) setLapsToGo(data.lsTg);
+                if (typeof data.f === "number") setFlag(data.f);
+              }
+              if (message.raceState.announcement) {
+                setLatestAnnouncement(message.raceState.announcement);
+              }
+              if (message.raceState.stats) {
+                const data = message.raceState.stats;
+                if (data.bestLapTime) {
+                  setSessionBestTime(data.bestLapTime);
+                  if (data.bestLapDriverName) {
+                    setSessionBestRider(data.bestLapDriverName);
+                  }
                 }
               }
+              if (message.raceState.controlAction) {
+                setControl((prevControl) => ({
+                  ...prevControl,
+                  ...message.raceState.controlAction,
+                }));
+              }
+              if (typeof message.raceState.isTimerRunning === "boolean") {
+                setIsTimerRunning(message.raceState.isTimerRunning);
+              }
+              if (typeof message.raceState.raceSeconds === "number") {
+                setRaceSeconds(message.raceState.raceSeconds);
+              }
+              if (typeof message.raceState.isManualMode === "boolean") {
+                const nextManual = message.raceState.isManualMode;
+                setIsManualMode(nextManual);
+                isManualModeRef.current = nextManual;
+                if (Array.isArray(message.raceState.manualRiders) && message.raceState.manualRiders.length > 0) {
+                  manualRidersRef.current = message.raceState.manualRiders;
+                  try {
+                    localStorage.setItem('manual_grid_riders', JSON.stringify(message.raceState.manualRiders));
+                    localStorage.setItem('manual_mode_active', nextManual ? 'true' : 'false');
+                  } catch (e) {}
+                  if (nextManual) {
+                    setRiders(message.raceState.manualRiders);
+                  }
+                }
+              }
+              if (message.raceState.lowerThird) {
+                setLowerThirdState({
+                  visible: !!message.raceState.lowerThird.visible,
+                  position: message.raceState.lowerThird.position || 'left',
+                  selectedRiderIds: Array.isArray(message.raceState.lowerThird.selectedRiderIds)
+                    ? message.raceState.lowerThird.selectedRiderIds
+                    : [],
+                });
+              }
             }
-            if (message.raceState.controlAction) {
-              setControl((prevControl) => ({
-              ...prevControl, // Keep all previous keys (e.g., laps: true)
-              ...message.raceState.controlAction  // Add or overwrite with new keys (e.g., time: true)
-            }));
-              // console.log("Control action updated from syncState:", message.raceState.controlAction);
+          }
+          else if (message.type === "manualDataSync") {
+            addWebSocketLog(
+              'system',
+              `📋 Received manual data sync: ${message.isManualMode ? 'Manual ON' : 'Manual OFF'} (${
+                message.riders?.length || 0
+              } racers)`
+            );
+            const nextManual = !!message.isManualMode;
+            setIsManualMode(nextManual);
+            isManualModeRef.current = nextManual;
+            if (message.riders && Array.isArray(message.riders)) {
+              manualRidersRef.current = message.riders;
+              try {
+                localStorage.setItem('manual_grid_riders', JSON.stringify(message.riders));
+                localStorage.setItem('manual_mode_active', nextManual ? 'true' : 'false');
+              } catch (e) {}
             }
-            if (typeof message.raceState.isTimerRunning === "boolean") {
-              setIsTimerRunning(message.raceState.isTimerRunning);
+            if (nextManual) {
+              if (message.riders && Array.isArray(message.riders) && message.riders.length > 0) {
+                setRiders(message.riders);
+              }
+            } else {
+              // Live Mode: revert to live Speedhive telemetry or default initial racers
+              if (hasLiveSpeedhiveDataRef.current && liveSpeedhiveRidersRef.current.length > 0) {
+                setRiders(liveSpeedhiveRidersRef.current);
+              } else {
+                setRiders(defaultInitialRiders);
+              }
             }
-            if (typeof message.raceState.raceSeconds === "number") {
-              setRaceSeconds(message.raceState.raceSeconds);
+
+            if (message.sessionInfo) {
+              const meta = message.sessionInfo;
+              if (meta.raceTitle) setRaceTitle(meta.raceTitle);
+              if (meta.sessionName) setSessionName(meta.sessionName);
+              if (meta.groupName) setGroupName(meta.groupName);
+              if (typeof meta.raceLaps === 'number') setRaceLaps(meta.raceLaps);
+              if (typeof meta.laps === 'number') setLaps(meta.laps);
+              if (typeof meta.lapsToGo === 'number') setLapsToGo(meta.lapsToGo);
+              if (typeof meta.flag === 'number') setFlag(meta.flag);
             }
+          }
+          else if (message.type === "lowerThirdControl") {
+            setLowerThirdState({
+              visible: !!message.visible,
+              position: message.position || 'left',
+              selectedRiderIds: Array.isArray(message.selectedRiderIds) ? message.selectedRiderIds : [],
+            });
           }
 
         } catch (err: any) {
@@ -1395,6 +1533,37 @@ export default function App() {
         <Route 
           path="/sideposition" 
           element={<Navigate to="/sidePosition" replace />} 
+        />
+        <Route
+          path="/lowerthird"
+          element={
+            <LowerThirdPage
+              riders={riders}
+              socket={connectionRef.current}
+              lowerThirdState={lowerThirdState}
+            />
+          }
+        />
+        <Route 
+          path="/lowerThird" 
+          element={<Navigate to="/lowerthird" replace />} 
+        />
+        <Route
+          path="/lowerthirdcontrol"
+          element={
+            <LowerThirdControlPage
+              riders={riders}
+              socket={connectionRef.current}
+              lowerThirdState={lowerThirdState}
+              raceTitle={raceTitle}
+              sessionName={sessionName}
+              groupName={groupName}
+            />
+          }
+        />
+        <Route 
+          path="/lowerThirdControl" 
+          element={<Navigate to="/lowerthirdcontrol" replace />} 
         />
       </Routes>
     </BrowserRouter>

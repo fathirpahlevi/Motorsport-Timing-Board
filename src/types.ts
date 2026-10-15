@@ -80,3 +80,9 @@ export interface ControlState {
   [key: string]: boolean | undefined;
 }
 
+export interface LowerThirdState {
+  visible: boolean;
+  position: 'left' | 'center' | 'right';
+  selectedRiderIds: string[];
+}
+

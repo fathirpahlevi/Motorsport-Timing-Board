@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Upload,
   FileSpreadsheet,
@@ -16,7 +16,8 @@ import {
   FileText,
   ArrowRight,
   Tv,
-  Radio
+  Radio,
+  ClipboardPaste
 } from 'lucide-react';
 import { RiderResult } from '../types';
 import { recalculateGaps } from '../data';
@@ -96,6 +97,10 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
   const [promptHint, setPromptHint] = useState<string>('');
   const [isExtracting, setIsExtracting] = useState<boolean>(false);
   const [geminiError, setGeminiError] = useState<string | null>(null);
+  const [isDraggingImages, setIsDraggingImages] = useState<boolean>(false);
+  const [isDraggingCsv, setIsDraggingCsv] = useState<boolean>(false);
+  const [isDraggingCard, setIsDraggingCard] = useState<boolean>(false);
+  const [pastedToast, setPastedToast] = useState<string | null>(null);
 
   // Parsed Staging State (Ready for Review & Application)
   const [previewResult, setPreviewResult] = useState<ParsedGridResult | null>(null);
@@ -296,39 +301,8 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
   };
 
   // ----------------------------------------------------
-  // MULTI-IMAGE UPLOAD & GEMINI OCR EXTRACTION
+  // MULTI-IMAGE UPLOAD, CLIPBOARD PASTE & DRAG-AND-DROP
   // ----------------------------------------------------
-  const handleImageFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    setGeminiError(null);
-    const newImages: UploadedImageFile[] = [];
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (!file.type.startsWith('image/')) continue;
-
-      const previewUrl = URL.createObjectURL(file);
-      const base64Data = await fileToBase64(file);
-
-      newImages.push({
-        id: `img-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 5)}`,
-        name: file.name,
-        size: file.size,
-        previewUrl,
-        base64Data,
-        mimeType: file.type || 'image/png',
-      });
-    }
-
-    setUploadedImages((prev) => [...prev, ...newImages]);
-    // Reset file input so user can pick the same file again if needed
-    if (imageFileInputRef.current) {
-      imageFileInputRef.current.value = '';
-    }
-  };
-
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -339,6 +313,141 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
       reader.onerror = (err) => reject(err);
       reader.readAsDataURL(file);
     });
+  };
+
+  const addImagesFromFiles = async (files: File[]) => {
+    const validImages = files.filter((f) => f.type.startsWith('image/'));
+    if (validImages.length === 0) return;
+
+    setGeminiError(null);
+    const newImages: UploadedImageFile[] = [];
+
+    for (let i = 0; i < validImages.length; i++) {
+      const file = validImages[i];
+      const previewUrl = URL.createObjectURL(file);
+      const base64Data = await fileToBase64(file);
+
+      newImages.push({
+        id: `img-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 5)}`,
+        name: file.name || `Screenshot-${Date.now()}-${i + 1}.png`,
+        size: file.size,
+        previewUrl,
+        base64Data,
+        mimeType: file.type || 'image/png',
+      });
+    }
+
+    setUploadedImages((prev) => [...prev, ...newImages]);
+  };
+
+  const handleImageFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    await addImagesFromFiles(Array.from(files));
+    if (imageFileInputRef.current) {
+      imageFileInputRef.current.value = '';
+    }
+  };
+
+  // Clipboard Paste Listener (Ctrl+V / Cmd+V)
+  useEffect(() => {
+    const handleGlobalPaste = async (e: ClipboardEvent) => {
+      let pastedFiles: File[] = [];
+      if (e.clipboardData?.files && e.clipboardData.files.length > 0) {
+        pastedFiles = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith('image/'));
+      }
+
+      if (pastedFiles.length === 0 && e.clipboardData?.items) {
+        const items = e.clipboardData.items;
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.type.indexOf('image') !== -1 || item.kind === 'file') {
+            const file = item.getAsFile();
+            if (file && file.type.startsWith('image/')) {
+              pastedFiles.push(file);
+            }
+          }
+        }
+      }
+
+      if (pastedFiles.length > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        setActiveTab('images');
+        await addImagesFromFiles(pastedFiles);
+        setPastedToast(`📸 ${pastedFiles.length} screenshot${pastedFiles.length > 1 ? 's' : ''} pasted from clipboard!`);
+        setTimeout(() => setPastedToast(null), 3500);
+      }
+    };
+
+    window.addEventListener('paste', handleGlobalPaste);
+    return () => window.removeEventListener('paste', handleGlobalPaste);
+  }, []);
+
+  // Explicit Button to read clipboard image directly
+  const handlePasteFromClipboardBtn = async () => {
+    try {
+      if (!navigator.clipboard?.read) {
+        setPastedToast(`💡 Press Ctrl+V (or Cmd+V) to paste screenshots directly`);
+        setTimeout(() => setPastedToast(null), 3500);
+        return;
+      }
+      const clipboardItems = await navigator.clipboard.read();
+      const files: File[] = [];
+      for (const item of clipboardItems) {
+        for (const type of item.types) {
+          if (type.startsWith('image/')) {
+            const blob = await item.getType(type);
+            const ext = type.split('/')[1] || 'png';
+            const file = new File([blob], `clipboard-${Date.now()}-${files.length + 1}.${ext}`, { type });
+            files.push(file);
+          }
+        }
+      }
+      if (files.length > 0) {
+        setActiveTab('images');
+        await addImagesFromFiles(files);
+        setPastedToast(`📸 ${files.length} screenshot${files.length > 1 ? 's' : ''} loaded from clipboard!`);
+        setTimeout(() => setPastedToast(null), 3500);
+      } else {
+        setPastedToast(`ℹ️ No image in clipboard. Copy a screenshot or press Ctrl+V.`);
+        setTimeout(() => setPastedToast(null), 3500);
+      }
+    } catch (err: any) {
+      console.warn('Clipboard read error:', err);
+      setPastedToast(`💡 Press Ctrl+V (or Cmd+V) to paste screenshots directly`);
+      setTimeout(() => setPastedToast(null), 3500);
+    }
+  };
+
+  // Drag and drop handler for files dropped from file manager
+  const handleGeneralFileDrop = async (e: React.DragEvent<HTMLElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingCard(false);
+    setIsDraggingImages(false);
+    setIsDraggingCsv(false);
+
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+
+    const imageFiles = Array.from(files).filter((f) => f.type.startsWith('image/'));
+    const csvFile = Array.from(files).find((f) => f.name.endsWith('.csv') || f.name.endsWith('.txt'));
+
+    if (imageFiles.length > 0) {
+      setActiveTab('images');
+      await addImagesFromFiles(imageFiles);
+      setPastedToast(`📥 ${imageFiles.length} screenshot image${imageFiles.length > 1 ? 's' : ''} dropped!`);
+      setTimeout(() => setPastedToast(null), 3000);
+    } else if (csvFile) {
+      setActiveTab('csv');
+      setCsvFileName(csvFile.name);
+      const text = await csvFile.text();
+      setCsvText(text);
+      parseCsvContent(text);
+      setPastedToast(`📥 CSV file ${csvFile.name} loaded!`);
+      setTimeout(() => setPastedToast(null), 3000);
+    }
   };
 
   const handleRemoveImage = (id: string) => {
@@ -508,8 +617,50 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
     });
   };
 
+  const handleEditPreviewMeta = (field: 'raceTitle' | 'groupName' | 'sessionName', value: string) => {
+    if (!previewResult) return;
+    setPreviewResult({
+      ...previewResult,
+      [field]: value,
+    });
+  };
+
   return (
-    <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-6 shadow-2xl space-y-6">
+    <div
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDraggingCard(true);
+      }}
+      onDragEnter={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDraggingCard(true);
+      }}
+      onDragLeave={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+        setIsDraggingCard(false);
+      }}
+      onDrop={handleGeneralFileDrop}
+      className="relative bg-zinc-900/90 border border-zinc-800 rounded-2xl p-6 shadow-2xl space-y-6 overflow-hidden"
+    >
+      {/* FULL CARD DRAG OVERLAY */}
+      {isDraggingCard && (
+        <div className="absolute inset-0 z-50 bg-purple-950/90 backdrop-blur-sm border-4 border-dashed border-purple-400 rounded-2xl flex flex-col items-center justify-center p-6 text-center animate-pulse">
+          <div className="w-20 h-20 bg-purple-600 rounded-full flex items-center justify-center text-white mb-4 shadow-xl">
+            <Upload className="w-10 h-10 animate-bounce" />
+          </div>
+          <h3 className="text-xl font-black text-white uppercase font-mono tracking-wider">
+            Drop Screenshot(s) or CSV File Here
+          </h3>
+          <p className="text-sm text-purple-200 mt-2 font-mono">
+            Drag multiple screenshot images or a CSV file directly from your computer
+          </p>
+        </div>
+      )}
+
       {/* HEADER & QUICK MODE SWITCHER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-5">
         <div>
@@ -729,10 +880,35 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
             )}
           </div>
 
-          {/* Upload Dropzone */}
+          {/* Clipboard Paste & Drag Notification Toast */}
+          {pastedToast && (
+            <div className="p-3 bg-emerald-950/90 border border-emerald-500/80 rounded-xl flex items-center justify-between gap-2 text-emerald-200 text-xs font-mono shadow-lg animate-bounce">
+              <span className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                {pastedToast}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPastedToast(null)}
+                className="text-emerald-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Upload Dropzone with Drag and Drop & Paste */}
           <div
             onClick={() => imageFileInputRef.current?.click()}
-            className="border-2 border-dashed border-zinc-800 hover:border-purple-500 rounded-xl p-6 text-center cursor-pointer transition-colors bg-zinc-900/40 hover:bg-zinc-900/70"
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingImages(true); }}
+            onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingImages(true); }}
+            onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingImages(false); }}
+            onDrop={handleGeneralFileDrop}
+            className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
+              isDraggingImages
+                ? 'border-purple-400 bg-purple-950/70 ring-4 ring-purple-500/30 scale-[1.01]'
+                : 'border-zinc-800 hover:border-purple-500 bg-zinc-900/40 hover:bg-zinc-900/70'
+            }`}
           >
             <input
               type="file"
@@ -742,15 +918,51 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
               multiple
               className="hidden"
             />
-            <div className="w-12 h-12 rounded-xl bg-purple-950/80 border border-purple-800/60 flex items-center justify-center mx-auto mb-2 text-purple-300">
-              <ImageIcon className="w-6 h-6" />
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-2.5 transition-colors ${
+              isDraggingImages ? 'bg-purple-600 text-white animate-bounce' : 'bg-purple-950/80 border border-purple-800/60 text-purple-300'
+            }`}>
+              <ImageIcon className="w-7 h-7" />
             </div>
-            <p className="text-xs font-bold text-zinc-200">
-              Click to select screenshot images (<span className="text-purple-400">Multi-select enabled</span>)
+            <p className="text-xs font-bold text-zinc-100">
+              {isDraggingImages ? (
+                <span className="text-purple-300 text-sm">Release to Drop Screenshot Image(s) Here!</span>
+              ) : (
+                <>
+                  <span className="text-purple-400 font-bold">Drag & Drop images here</span>, click to browse, or press <span className="text-emerald-400 font-mono font-black">Ctrl+V / Cmd+V</span> to paste!
+                </>
+              )}
             </p>
-            <p className="text-[10px] text-zinc-500 mt-1">
-              Supports PNG, JPG, WEBP. You can select multiple pages at once or add more sequentially.
+            <p className="text-[10px] text-zinc-400 mt-1.5 flex flex-wrap items-center justify-center gap-2">
+              <span className="bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">📋 Clipboard Paste Supported</span>
+              <span className="bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">🖱️ Drag & Drop Multi-Image</span>
+              <span className="bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">PNG / JPG / WEBP</span>
             </p>
+          </div>
+
+          {/* Quick Input Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2.5 justify-center sm:justify-start">
+            <button
+              type="button"
+              onClick={handlePasteFromClipboardBtn}
+              className="px-4 py-2 bg-emerald-600/90 hover:bg-emerald-500 text-white text-xs font-bold uppercase rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md hover:shadow-emerald-950/50"
+              title="Read screenshot image directly from clipboard (or press Ctrl+V / Cmd+V)"
+            >
+              <ClipboardPaste className="w-4 h-4 text-emerald-200" />
+              Paste from Clipboard
+              <span className="bg-black/30 text-emerald-200 px-1.5 py-0.5 rounded text-[10px] font-mono">
+                Ctrl+V
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => imageFileInputRef.current?.click()}
+              className="px-4 py-2 bg-purple-900/60 hover:bg-purple-800/80 border border-purple-700/60 text-purple-200 hover:text-white text-xs font-bold uppercase rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md"
+              title="Select images from your computer's file manager"
+            >
+              <Upload className="w-4 h-4 text-purple-300" />
+              Choose from File Manager
+            </button>
           </div>
 
           {/* Uploaded Images Gallery */}
@@ -893,45 +1105,55 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
             </div>
           </div>
 
-          {/* Event Metadata Preview if detected */}
-          {(previewResult.raceTitle || previewResult.groupName || previewResult.sessionName) && (
-            <div className="p-3 bg-zinc-900/80 border border-zinc-800 rounded-xl space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 font-mono">
-                  Detected Event Titles
-                </span>
-                <label className="flex items-center gap-1.5 text-xs font-mono text-zinc-300 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={updateTitlesWithPreview}
-                    onChange={(e) => setUpdateTitlesWithPreview(e.target.checked)}
-                    className="w-3.5 h-3.5 rounded bg-zinc-950 border-zinc-700 text-emerald-600 cursor-pointer"
-                  />
-                  <span>Update race/session titles to match</span>
-                </label>
+          {/* Event Metadata Preview - Editable before applying */}
+          <div className="p-3 bg-zinc-900/80 border border-zinc-800 rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 font-mono">
+                Event & Session Metadata (Editable)
+              </span>
+              <label className="flex items-center gap-1.5 text-xs font-mono text-zinc-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={updateTitlesWithPreview}
+                  onChange={(e) => setUpdateTitlesWithPreview(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded bg-zinc-950 border-zinc-700 text-emerald-600 cursor-pointer"
+                />
+                <span>Update race/session titles to match</span>
+              </label>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-mono">
+              <div className="bg-zinc-950 p-2 rounded border border-zinc-800 focus-within:border-emerald-500 transition-colors">
+                <label className="text-zinc-500 text-[9px] block uppercase font-bold mb-1">Race / Event Title</label>
+                <input
+                  type="text"
+                  value={previewResult.raceTitle || ''}
+                  onChange={(e) => handleEditPreviewMeta('raceTitle', e.target.value)}
+                  placeholder="e.g. MOTOGP SPRINT RACE"
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-white font-bold text-xs focus:outline-none focus:border-emerald-500"
+                />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-mono">
-                {previewResult.raceTitle && (
-                  <div className="bg-zinc-950 p-2 rounded border border-zinc-800">
-                    <span className="text-zinc-500 text-[9px] block uppercase">Event</span>
-                    <span className="text-white font-bold">{previewResult.raceTitle}</span>
-                  </div>
-                )}
-                {previewResult.groupName && (
-                  <div className="bg-zinc-950 p-2 rounded border border-zinc-800">
-                    <span className="text-zinc-500 text-[9px] block uppercase">Class / Group</span>
-                    <span className="text-white font-bold">{previewResult.groupName}</span>
-                  </div>
-                )}
-                {previewResult.sessionName && (
-                  <div className="bg-zinc-950 p-2 rounded border border-zinc-800">
-                    <span className="text-zinc-500 text-[9px] block uppercase">Session</span>
-                    <span className="text-white font-bold">{previewResult.sessionName}</span>
-                  </div>
-                )}
+              <div className="bg-zinc-950 p-2 rounded border border-zinc-800 focus-within:border-emerald-500 transition-colors">
+                <label className="text-zinc-500 text-[9px] block uppercase font-bold mb-1">Class / Group Name</label>
+                <input
+                  type="text"
+                  value={previewResult.groupName || ''}
+                  onChange={(e) => handleEditPreviewMeta('groupName', e.target.value)}
+                  placeholder="e.g. YCR 2 NOVICE"
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-white font-bold text-xs focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div className="bg-zinc-950 p-2 rounded border border-zinc-800 focus-within:border-emerald-500 transition-colors">
+                <label className="text-zinc-500 text-[9px] block uppercase font-bold mb-1">Session Name</label>
+                <input
+                  type="text"
+                  value={previewResult.sessionName || ''}
+                  onChange={(e) => handleEditPreviewMeta('sessionName', e.target.value)}
+                  placeholder="e.g. RACE FINAL"
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-white font-bold text-xs focus:outline-none focus:border-emerald-500"
+                />
               </div>
             </div>
-          )}
+          </div>
 
           {/* Parsed Racers Table */}
           <div className="overflow-x-auto max-h-96 overflow-y-auto border border-zinc-800 rounded-xl">

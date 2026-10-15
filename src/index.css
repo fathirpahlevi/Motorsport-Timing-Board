@@ -103,4 +103,67 @@
     font-family: 'Orbitron', sans-serif;
     font-weight: 600;
   }
+
+  /* Lower Third Top-Border Reveal Animations */
+  @keyframes lt-top-border-in {
+    0% {
+      transform: scaleX(0);
+      opacity: 0;
+    }
+    100% {
+      transform: scaleX(1);
+      opacity: 1;
+    }
+  }
+
+  @keyframes lt-card-unfold-down {
+    0% {
+      transform: scaleY(0);
+      opacity: 0;
+    }
+    100% {
+      transform: scaleY(1);
+      opacity: 1;
+    }
+  }
+
+  @keyframes lt-card-fold-up {
+    0% {
+      transform: scaleY(1);
+      opacity: 1;
+    }
+    100% {
+      transform: scaleY(0);
+      opacity: 0;
+    }
+  }
+
+  @keyframes lt-top-border-out {
+    0% {
+      transform: scaleX(1);
+      opacity: 1;
+    }
+    100% {
+      transform: scaleX(0);
+      opacity: 0;
+    }
+  }
+
+  .lt-border-enter {
+    animation: lt-top-border-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .lt-card-enter {
+    transform-origin: top;
+    animation: lt-card-unfold-down 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.1s backwards;
+  }
+
+  .lt-card-exit {
+    transform-origin: top;
+    animation: lt-card-fold-up 0.3s cubic-bezier(0.7, 0, 0.84, 0) forwards;
+  }
+
+  .lt-border-exit {
+    animation: lt-top-border-out 0.2s cubic-bezier(0.7, 0, 0.84, 0) 0.15s forwards;
+  }
 }
