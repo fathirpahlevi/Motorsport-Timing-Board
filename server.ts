@@ -26,6 +26,7 @@ let savedID = {eventId: "", sessionId: ""};
 let raceState = {
   eventId: "",
   sessionId: "",
+  speedhiveUrl: "",
   results: null as any,
   sessionInfo: null as any,
   announcement: "",
@@ -44,12 +45,37 @@ let raceState = {
 };
 const allClients = new Set<WSClient>();
 
+function parseSpeedhiveUrl(urlStr: string) {
+  try {
+    const clean = (urlStr || '').trim();
+    if (!clean) return { eventId: null, sessionId: null };
+    if (clean.startsWith('http')) {
+      const match = clean.match(/\/livetiming\/([A-Za-z0-9\-]+)\/sessions\/([A-Za-z0-9\-]+)/);
+      if (match) {
+        return { eventId: match[1], sessionId: match[2] };
+      }
+    }
+    const cleanId = clean.replace(/[^A-Za-z0-9\-]/g, '');
+    const parts = cleanId.split('-');
+    if (parts.length >= 2) {
+      return {
+        eventId: `${parts[0]}-${parts[1]}`,
+        sessionId: cleanId,
+      };
+    }
+    return { eventId: null, sessionId: cleanId || null };
+  } catch (err) {
+    return { eventId: null, sessionId: null };
+  }
+}
+
 const STATE_CACHE_FILE = path.join(process.cwd(), '.race-state-cache.json');
 
 function saveRaceStateCache() {
   try {
     const toSave = {
       savedID,
+      speedhiveUrl: raceState.speedhiveUrl,
       isManualMode: raceState.isManualMode,
       manualRiders: raceState.manualRiders,
       manualSessionInfo: raceState.manualSessionInfo,
@@ -68,6 +94,7 @@ function loadRaceStateCache() {
     if (fs.existsSync(STATE_CACHE_FILE)) {
       const data = JSON.parse(fs.readFileSync(STATE_CACHE_FILE, 'utf-8'));
       if (data.savedID) savedID = data.savedID;
+      if (data.speedhiveUrl) raceState.speedhiveUrl = data.speedhiveUrl;
       if (typeof data.isManualMode === 'boolean') raceState.isManualMode = data.isManualMode;
       if (Array.isArray(data.manualRiders) && data.manualRiders.length > 0) raceState.manualRiders = data.manualRiders;
       if (data.manualSessionInfo) raceState.manualSessionInfo = data.manualSessionInfo;
@@ -333,22 +360,153 @@ ${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
     }
   }
 
-  // Helper to handle client subscriber exit
+  // Helper to handle client subscriber exit without abruptly killing global SignalR
   function removeClientFromAllSessions(ws: WSClient) {
     allClients.delete(ws);
-    for (const [sessionId, sessionSub] of activeSignalRConnections.entries()) {
-      if (sessionSub.subscribers.has(ws)) {
-        sessionSub.subscribers.delete(ws);
-        console.log(`[WS Server] Client unsubscribed from session: ${sessionId}. Active subscribers left: ${sessionSub.subscribers.size}`);
+    for (const [, sessionSub] of activeSignalRConnections.entries()) {
+      sessionSub.subscribers.delete(ws);
+    }
+  }
 
-        if (sessionSub.subscribers.size === 0) {
-          console.log(`[SignalR Proxy] No subscribers left for session: ${sessionId}. Stopping SignalR connection...`);
-          sessionSub.connection.stop().catch(err => {
-            console.error(`Error stopping SignalR connection for ${sessionId}:`, err);
-          });
-          activeSignalRConnections.delete(sessionId);
-        }
+  // Helper to shut down all active SignalR connections
+  async function shutdownSignalRSessions() {
+    console.log(`[SignalR Proxy] Shutting down active SignalR connections (${activeSignalRConnections.size})...`);
+    for (const [id, sessionSub] of activeSignalRConnections.entries()) {
+      try {
+        await sessionSub.connection.stop();
+        console.log(`[SignalR Proxy] Stopped SignalR connection for ${id}`);
+      } catch (e) {
+        console.error(`Error stopping SignalR connection for ${id}:`, e);
       }
+    }
+    activeSignalRConnections.clear();
+    broadcastToAll({
+      type: "sessionStatus",
+      status: "disconnected",
+      action: "shutdown",
+      message: "SignalR live connection was shut down by operator."
+    });
+    broadcastToAll({ type: "status", status: "disconnected" });
+  }
+
+  // Helper to connect or reconnect SignalR session and fetch fresh baseline data
+  async function startOrReconnectSignalRSession(targetSessionId: string, targetEventId?: string) {
+    if (!targetSessionId) return;
+
+    // First stop existing connection
+    const existing = activeSignalRConnections.get(targetSessionId);
+    if (existing) {
+      try {
+        await existing.connection.stop();
+      } catch (e) {}
+      activeSignalRConnections.delete(targetSessionId);
+    }
+
+    savedID.sessionId = targetSessionId;
+    raceState.sessionId = targetSessionId;
+    if (targetEventId) {
+      savedID.eventId = targetEventId;
+      raceState.eventId = targetEventId;
+    }
+
+    // Switch to live mode when SignalR connects
+    raceState.isManualMode = false;
+
+    // Fetch fresh baseline data from Speedhive REST API if eventId is available
+    if (savedID.eventId && savedID.sessionId) {
+      try {
+        const apiUrl = `https://lt-api.speedhive.com/api/events/${savedID.eventId}/sessions/${savedID.sessionId}/data`;
+        console.log(`[Proxy] Fetching fresh baseline data: ${apiUrl}`);
+        const response = await fetch(apiUrl, {
+          headers: {
+            "accept": "application/json",
+            "origin": "https://speedhive.mylaps.com",
+            "referer": "https://speedhive.mylaps.com/"
+          }
+        });
+        if (response.ok) {
+          const freshData = await response.json();
+          raceState.results = freshData;
+          if (freshData.eNam || freshData.rnNam || freshData.gNam || freshData.btLpTim || freshData.ls || freshData.lsTg || typeof freshData.f === "number") {
+            raceState.sessionInfo = {
+              eNam: freshData.eNam,
+              rnNam: freshData.rnNam,
+              gNam: freshData.gNam,
+              btLpTim: freshData.btLpTim,
+              ls: freshData.ls,
+              lsTg: freshData.lsTg,
+              f: freshData.f
+            };
+          }
+          saveRaceStateCache();
+          broadcastToAll({ type: "initialData", data: freshData });
+          broadcastToAll({ type: "resultsForSessionReceived", data: freshData });
+          broadcastToAll({ type: "sessionAddedOrUpdated", data: raceState.sessionInfo });
+          broadcastToAll({ type: "manualDataSync", isManualMode: false });
+        }
+      } catch (err) {
+        console.error("[Proxy Error fetching fresh data]", err);
+      }
+    }
+
+    // Connect to SignalR hub
+    try {
+      console.log(`[SignalR Proxy] Initiating SignalR connection for session: ${targetSessionId}`);
+      broadcastToAll({ type: "status", status: "connecting", sessionId: targetSessionId });
+
+      const connection = new HubConnectionBuilder()
+        .withUrl("https://notifications.speedhive.com/api", {
+          webSocket: WSClient as any,
+        } as any)
+        .withAutomaticReconnect()
+        .build();
+
+      const sessionSub: SessionSubscription = {
+        connection,
+        subscribers: new Set<WSClient>(allClients),
+      };
+      activeSignalRConnections.set(targetSessionId, sessionSub);
+
+      connection.on("resultsForSessionReceived", (data) => {
+        raceState.results = data;
+        broadcastToAll({ type: "resultsForSessionReceived", data });
+      });
+
+      connection.on("sessionAddedOrUpdated", (data) => {
+        raceState.sessionInfo = { ...raceState.sessionInfo, ...data };
+        broadcastToAll({ type: "sessionAddedOrUpdated", data });
+      });
+
+      connection.on("announcementsUpdated", (data) => {
+        if (data && data.tx) {
+          raceState.announcement = data.tx;
+        }
+        broadcastToAll({ type: "announcementsUpdated", data });
+      });
+
+      connection.on("statsUpdated", (data) => {
+        raceState.stats = data;
+        broadcastToAll({ type: "statsUpdated", data });
+      });
+
+      await connection.start();
+      console.log(`[SignalR Proxy] Connected to Speedhive for session: ${targetSessionId}`);
+      await connection.invoke("JoinGroup", `session-${targetSessionId}`);
+      console.log(`[SignalR Proxy] Joined Group session-${targetSessionId}`);
+
+      broadcastToAll({ type: "status", status: "connected", sessionId: targetSessionId });
+      broadcastToAll({
+        type: "sessionControl",
+        action: "reconnected",
+        status: "connected",
+        sessionId: targetSessionId,
+        message: "SignalR session reconnected successfully."
+      });
+      saveRaceStateCache();
+    } catch (err: any) {
+      console.error(`[SignalR Proxy Error] Failed for session ${targetSessionId}:`, err);
+      broadcastToAll({ type: "status", status: "error", message: err.message, sessionId: targetSessionId });
+      activeSignalRConnections.delete(targetSessionId);
     }
   }
 
@@ -614,8 +772,51 @@ ${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
           sendToClient(ws, { type: "errorMessage", error:message.error});
         }
         else if (message.type === 'speedhiveURL'){
-          broadcastToAll({type:"speedhiveURL", url:message.url});
-          sendToClient(ws, { type: "speedhiveURL", url:message.url});
+          const url = message.url;
+          raceState.speedhiveUrl = url;
+          broadcastToAll({ type: "speedhiveURL", url: message.url });
+          sendToClient(ws, { type: "speedhiveURL", url: message.url });
+
+          if (url) {
+            const parsed = parseSpeedhiveUrl(url);
+            if (parsed.sessionId) {
+              console.log(`[WS Server] Auto-connecting Speedhive session: sessionId=${parsed.sessionId}, eventId=${parsed.eventId}`);
+              // Switch to live mode, reset manual riders and previous session results
+              raceState.isManualMode = false;
+              raceState.manualRiders = [];
+              raceState.manualSessionInfo = undefined;
+              raceState.results = null;
+              saveRaceStateCache();
+              await startOrReconnectSignalRSession(parsed.sessionId, parsed.eventId || undefined);
+            }
+          }
+        }
+        else if (message.type === 'sessionControl') {
+          console.log(`[WS Server] Received sessionControl: action=${message.action}`);
+          if (message.action === 'shutdown') {
+            await shutdownSignalRSessions();
+            saveRaceStateCache();
+          } else if (message.action === 'reconnect') {
+            const urlToUse = message.url || raceState.speedhiveUrl;
+            let targetSessionId = savedID.sessionId || raceState.sessionId;
+            let targetEventId = savedID.eventId || raceState.eventId;
+            if (urlToUse) {
+              const parsed = parseSpeedhiveUrl(urlToUse);
+              if (parsed.sessionId) {
+                targetSessionId = parsed.sessionId;
+                if (parsed.eventId) targetEventId = parsed.eventId;
+              }
+            }
+            if (targetSessionId) {
+              await startOrReconnectSignalRSession(targetSessionId, targetEventId);
+              saveRaceStateCache();
+            } else {
+              broadcastToAll({
+                type: 'errorMessage',
+                error: 'Cannot reconnect: No active Speedhive URL or Session ID configured.'
+              });
+            }
+          }
         }
         else if (message.type === 'stopwatch') {
           console.log(`[WS Server] Stopwatch sync: running=${message.action === 'start'}, seconds=${message.raceSeconds}`);

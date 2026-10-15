@@ -129,26 +129,11 @@
         setIsManualMode(nextState);
 
         let nextRiders = riders;
-        // If turning on manual mode and no racers exist, check local storage or load sample preset
+        // If turning on manual mode and no racers exist, load sample preset
         if (nextState && riders.length === 0) {
-            try {
-                const savedManual = localStorage.getItem('manual_grid_riders');
-                if (savedManual) {
-                    const parsed = JSON.parse(savedManual);
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                        nextRiders = parsed;
-                    }
-                }
-            } catch (e) {}
-            if (nextRiders.length === 0) {
-                nextRiders = recalculateGaps(SAMPLE_PRESET_RIDERS);
-            }
+            nextRiders = recalculateGaps(SAMPLE_PRESET_RIDERS);
             setRiders(nextRiders);
         }
-
-        try {
-            localStorage.setItem('manual_mode_active', nextState ? 'true' : 'false');
-        } catch (e) {}
 
         broadcastManualData(nextState, nextRiders);
     };
@@ -201,11 +186,6 @@
                 setSessionName(metadata.sessionName);
             }
         }
-
-        try {
-            localStorage.setItem('manual_grid_riders', JSON.stringify(finalRiders));
-            localStorage.setItem('manual_mode_active', 'true');
-        } catch (e) {}
 
         // Automatically ensure manual mode is active and broadcast immediately
         setIsManualMode(true);

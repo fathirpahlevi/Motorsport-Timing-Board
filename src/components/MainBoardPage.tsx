@@ -547,7 +547,6 @@ export const MainBoardPage: React.FC<MainBoardPageProps> = ({
                       <button
                         onClick={() => {
                           setSpeedhiveUrl('');
-                          localStorage.removeItem('speedhive_url');
                           setRiders(recalculateGaps(INITIAL_RIDERS));
                           setRaceTitle('-');
                           setSessionName('Live Timing Stream');
@@ -635,7 +634,6 @@ export const MainBoardPage: React.FC<MainBoardPageProps> = ({
                         onChange={(e) => {
                           const val = parseInt(e.target.value, 10) || 12;
                           setRaceLaps(val);
-                          localStorage.setItem('race_laps', val.toString());
                         }}
                         className="bg-zinc-950 border border-zinc-800 px-3 py-2 rounded text-xs text-zinc-100 font-mono focus:outline-none focus:border-red-600"
                       />
@@ -651,7 +649,6 @@ export const MainBoardPage: React.FC<MainBoardPageProps> = ({
                         checked={isClosedLoop}
                         onChange={(e) => {
                           setIsClosedLoop(e.target.checked);
-                          localStorage.setItem('is_closed_loop', e.target.checked.toString());
                         }}
                         className="w-4 h-4 rounded text-red-600 focus:ring-red-500 accent-red-600 bg-zinc-950 border-zinc-800 cursor-pointer"
                       />

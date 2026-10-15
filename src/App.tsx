@@ -125,9 +125,7 @@ export default function App() {
   const [speedhiveUrl, setSpeedhiveUrl] = useState<string>();
   const resultData = useRef<RaceEventData | null>(null);
   const [raceLaps, setRaceLaps] = useState<number>(0);
-  const [isClosedLoop, setIsClosedLoop] = useState<boolean>(() => {
-    return localStorage.getItem('is_closed_loop') !== 'false';
-  });
+  const [isClosedLoop, setIsClosedLoop] = useState<boolean>(true);
   const [showLTG, setShowLTG] = useState<boolean>(false);
   const [showLaps, setShowLaps] = useState<boolean>(false);
   const [showBanner, setShowBanner] = useState<boolean>(true);
@@ -264,33 +262,13 @@ export default function App() {
   });
 
   // Active Riders / Telemetry grid
-  const [isManualMode, setIsManualMode] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('manual_mode_active') === 'true';
-    } catch {
-      return false;
-    }
-  });
-  const isManualModeRef = useRef<boolean>(isManualMode);
+  const [isManualMode, setIsManualMode] = useState<boolean>(false);
+  const isManualModeRef = useRef<boolean>(false);
   useEffect(() => {
     isManualModeRef.current = isManualMode;
-    try {
-      localStorage.setItem('manual_mode_active', isManualMode ? 'true' : 'false');
-    } catch {}
   }, [isManualMode]);
 
   const [riders, setRiders] = useState<RiderResult[]>(() => {
-    try {
-      const savedManual = localStorage.getItem('manual_grid_riders');
-      const isManual = localStorage.getItem('manual_mode_active') === 'true';
-      if (isManual && savedManual) {
-        const parsed = JSON.parse(savedManual);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          manualRidersRef.current = parsed;
-          return parsed;
-        }
-      }
-    } catch (e) {}
     return recalculateGaps(INITIAL_RIDERS);
   });
 
@@ -528,7 +506,9 @@ export default function App() {
       });
 
       const incomingIds = new Set(packetObj.results.map(r => r.id));
-      const omittedRiders = prevRiders.filter(r => !incomingIds.has(r.id));
+      const omittedRiders = prevRiders.filter(
+        (r) => !incomingIds.has(r.id) && r.sesId !== 'ses_ycr1_ycr2_expert_novice' && !r.id.startsWith('manual-rider-')
+      );
       
       const fullRaceGroup = [...mergedRiders, ...omittedRiders];
       const sortedPack = recalculateGaps(fullRaceGroup);
@@ -700,24 +680,8 @@ export default function App() {
           }));
         }
 
-        // Request full state synchronization
+        // Request full state synchronization from authoritative server
         socket.send(JSON.stringify({ type: "syncState" }));
-
-        // If local manual mode was active, send manualDataSync to ensure server has our grid
-        try {
-          const savedManual = localStorage.getItem('manual_grid_riders');
-          const isManual = localStorage.getItem('manual_mode_active') === 'true';
-          if (isManual && savedManual) {
-            const parsed = JSON.parse(savedManual);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              socket.send(JSON.stringify({
-                type: 'manualDataSync',
-                isManualMode: true,
-                riders: parsed,
-              }));
-            }
-          }
-        } catch (e) {}
       };
 
       socket.onmessage = (event) => {
@@ -844,20 +808,35 @@ export default function App() {
               setConnectionError(message.message || 'Subscription failed');
               addWebSocketLog('system', `❌ Subscription Error: ${message.message}`);
             }
-          } else if (message.type === "manualDataSync") {
-            addWebSocketLog('system', `⚙️ Manual Mode Sync received: enabled=${message.isManualMode}`);
-            setIsManualMode(!!message.isManualMode);
-            if (message.riders && Array.isArray(message.riders)) {
-              setRiders(message.riders);
+          } else if (message.type === "sessionStatus") {
+            addWebSocketLog('system', `📡 Session Status: ${message.status} - ${message.message || ''}`);
+            if (message.status === 'disconnected') {
+              setConnectionStatus('disconnected');
+            } else if (message.status === 'connected') {
+              setConnectionStatus('connected');
             }
-            if (message.sessionInfo) {
-              if (typeof message.sessionInfo.raceTitle === 'string') setRaceTitle(message.sessionInfo.raceTitle);
-              if (typeof message.sessionInfo.sessionName === 'string') setSessionName(message.sessionInfo.sessionName);
-              if (typeof message.sessionInfo.groupName === 'string') setGroupName(message.sessionInfo.groupName);
-              if (typeof message.sessionInfo.raceLaps === 'number') setRaceLaps(message.sessionInfo.raceLaps);
-              if (typeof message.sessionInfo.laps === 'number') setLaps(message.sessionInfo.laps);
-              if (typeof message.sessionInfo.lapsToGo === 'number') setLapsToGo(message.sessionInfo.lapsToGo);
-              if (typeof message.sessionInfo.flag === 'number') setFlag(message.sessionInfo.flag);
+          } else if (message.type === "initialData") {
+            addWebSocketLog('in', `📥 Received fresh initial data from Speedhive`);
+            const data = message.data;
+            if (data) {
+              if (data.eNam) setRaceTitle(data.eNam);
+              if (data.rnNam) setSessionName(data.rnNam);
+              if (data.gNam) setGroupName(data.gNam);
+              if (data.btLpTim) setSessionBestTime(data.btLpTim);
+              if (data.ls) setLaps(data.ls);
+              if (data.lsTg) setLapsToGo(data.lsTg);
+              if (typeof data.f === "number") setFlag(data.f);
+
+              if (Array.isArray(data.l)) {
+                const sorted = recalculateGaps(data.l);
+                liveSpeedhiveRidersRef.current = sorted;
+                hasLiveSpeedhiveDataRef.current = true;
+                if (!isManualModeRef.current) {
+                  setRiders(sorted);
+                }
+              } else if (Array.isArray(data.results)) {
+                injectSignalRPacket(data);
+              }
             }
           } else if (message.type === "resultsForSessionReceived") {
             addWebSocketLog('in', `📥 resultsForSessionReceived websocket frame parsed`);
@@ -943,9 +922,18 @@ export default function App() {
               if (message.raceState.eventId) {
                 setEventId(message.raceState.eventId);
               }
-              if (message.raceState.results && Array.isArray(message.raceState.results.results)) {
-                injectSignalRPacket(message.raceState.results);
+              const resData = message.raceState.results || message.results;
+              if (resData && Array.isArray(resData.results)) {
+                injectSignalRPacket(resData);
+              } else if (resData && Array.isArray(resData.l)) {
+                const sorted = recalculateGaps(resData.l);
+                liveSpeedhiveRidersRef.current = sorted;
+                hasLiveSpeedhiveDataRef.current = true;
+                if (!message.raceState.isManualMode) {
+                  setRiders(sorted);
+                }
               }
+
               if (message.raceState.sessionInfo) {
                 const data = message.raceState.sessionInfo;
                 if (data.eNam) setRaceTitle(data.eNam);
@@ -987,10 +975,6 @@ export default function App() {
                 isManualModeRef.current = nextManual;
                 if (Array.isArray(message.raceState.manualRiders) && message.raceState.manualRiders.length > 0) {
                   manualRidersRef.current = message.raceState.manualRiders;
-                  try {
-                    localStorage.setItem('manual_grid_riders', JSON.stringify(message.raceState.manualRiders));
-                    localStorage.setItem('manual_mode_active', nextManual ? 'true' : 'false');
-                  } catch (e) {}
                   if (nextManual) {
                     setRiders(message.raceState.manualRiders);
                   }
@@ -1019,10 +1003,6 @@ export default function App() {
             isManualModeRef.current = nextManual;
             if (message.riders && Array.isArray(message.riders)) {
               manualRidersRef.current = message.riders;
-              try {
-                localStorage.setItem('manual_grid_riders', JSON.stringify(message.riders));
-                localStorage.setItem('manual_mode_active', nextManual ? 'true' : 'false');
-              } catch (e) {}
             }
             if (nextManual) {
               if (message.riders && Array.isArray(message.riders) && message.riders.length > 0) {
@@ -1106,7 +1086,6 @@ export default function App() {
       return;
     }
 
-    localStorage.setItem('speedhive_url', urlToUse);
     setAutoSimulate(false); // disable simulator on real speedhive load
     // 1. Load initial timing tables
     if (eventId) {

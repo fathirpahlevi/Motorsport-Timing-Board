@@ -211,6 +211,34 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
 
         // Send using the parent's WebSocket instance
         socket.send(JSON.stringify(payload));
+        setLocalStatus(`Sent: Connect Speedhive URL`);
+    };
+
+    const sendShutdownSession = () => {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+            setLocalStatus('Error: Server connection is offline.');
+            return;
+        }
+        socket.send(JSON.stringify({
+            type: 'sessionControl',
+            action: 'shutdown',
+            timestamp: Date.now(),
+        }));
+        setLocalStatus('Sent: Shutdown SignalR Session');
+    };
+
+    const sendReconnectSession = () => {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+            setLocalStatus('Error: Server connection is offline.');
+            return;
+        }
+        socket.send(JSON.stringify({
+            type: 'sessionControl',
+            action: 'reconnect',
+            url: speedhiveUrl,
+            timestamp: Date.now(),
+        }));
+        setLocalStatus('Sent: Reconnect SignalR Session');
     };
     const sendInputDevice = (obj: Object) =>{
         
@@ -592,23 +620,47 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
                     </div>
                 </div>
 
-                    <div className="flex gap-2 pt-1">
-                        <button
-                        onClick={() => {
-                            sendSpeedhiveURL(speedhiveUrl)
-                        }}
-                        className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-sans font-black uppercase tracking-wider text-xs rounded transition-all cursor-pointer text-center"
-                        >
-                        Connect Live Stream
-                        </button>
-                        {speedhiveUrl && (
-                        <button
-                            onClick={() => {sendControlCommand('reset',true)}}
-                            className="px-3 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 text-xs font-bold uppercase tracking-wider rounded cursor-pointer"
-                        >
-                            Reset
-                        </button>
-                        )}
+                    <div className="flex flex-col gap-2 pt-1">
+                        <div className="flex gap-2">
+                            <button
+                            onClick={() => {
+                                sendSpeedhiveURL(speedhiveUrl);
+                            }}
+                            className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-sans font-black uppercase tracking-wider text-xs rounded transition-all cursor-pointer text-center"
+                            >
+                            Connect Live Stream
+                            </button>
+                            {speedhiveUrl && (
+                            <button
+                                onClick={() => {sendControlCommand('reset',true)}}
+                                className="px-3 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 text-xs font-bold uppercase tracking-wider rounded cursor-pointer"
+                            >
+                                Reset
+                            </button>
+                            )}
+                        </div>
+
+                        {/* SignalR Session Control: Shutdown & Reconnect */}
+                        <div className="flex gap-2 pt-0.5">
+                            <button
+                            type="button"
+                            onClick={sendShutdownSession}
+                            disabled={connectionStatus !== 'connected'}
+                            className="flex-1 py-2 bg-zinc-900 hover:bg-zinc-950 text-rose-400 hover:text-rose-300 border border-rose-900/50 font-sans font-bold uppercase tracking-wider text-[11px] rounded transition-all cursor-pointer text-center disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                            title="Shut off the active backend SignalR connection"
+                            >
+                            🛑 Shutdown Session
+                            </button>
+
+                            <button
+                            type="button"
+                            onClick={sendReconnectSession}
+                            className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white font-sans font-bold uppercase tracking-wider text-[11px] rounded transition-all cursor-pointer text-center shadow-sm"
+                            title="Reconnect SignalR connection and fetch fresh baseline data"
+                            >
+                            🔄 Reconnect Session
+                            </button>
+                        </div>
                     </div>
                     
                     <div className="text-center text-xs font-mono">
