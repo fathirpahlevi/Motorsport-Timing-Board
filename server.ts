@@ -126,12 +126,6 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-  app.use(basicAuth({
-    users: { 'broadcast': '11livestream2020' }, // Change these credentials
-    challenge: true, // Triggers the browser's native login popup
-    realm: 'Motorsport Timing Dashboard' // Optional realm name,
-  }));
-
   // Multimodal Gemini endpoint to convert screenshots of starting grid
   app.post("/api/extract-starting-grid", async (req, res) => {
     try {
