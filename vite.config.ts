@@ -19,7 +19,10 @@ export default defineConfig(() => {
       // watch: process.env.DISABLE_HMR === 'true' ? null : {},
       hmr:{
         overlay:false,
-      }
+      },
+      watch: {
+        ignored: ['**/.race-state-cache.json'],
+      },
     },
   build: {
     // Set to false to disable source maps completely in production builds

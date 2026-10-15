@@ -249,7 +249,7 @@ export const LowerThirdPage: React.FC<LowerThirdPageProps> = ({
             const posDisplay = rider.pos || String(rider.lbpos || 1);
             const raceNumber = rider.dNo || rider.no || '-';
             const fullName = rider.fNam || rider.nam || 'UNKNOWN RACER';
-            const teamName = rider.cb && rider.cb.trim() !== '' ? rider.cb : 'INDEPENDENT RACER';
+            const teamName = rider.cb && rider.cb.trim() !== '' ? rider.cb : '-';
 
             const isExiting = status === 'exiting';
             const isEntering = status === 'entering';
@@ -294,7 +294,7 @@ export const LowerThirdPage: React.FC<LowerThirdPageProps> = ({
                     </div>
 
                     {/* COLUMN 2: Divided into two rows */}
-                    <div className="flex flex-col justify-between bg-zinc-950">
+                    <div className="flex flex-col justify-between bg-zinc-950 truncate">
                       {/* ROW 1: Divided into two columns (Full name & Race number) */}
                       <div className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-zinc-900 to-zinc-950 border-b border-zinc-850">
                         {/* Row 1, Col 1: Full Name */}
