@@ -413,7 +413,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
 
                       </div>
 
-                      {/* TIMING & GAP / DIFF COLUMNS */}
+                      {/* INFORMATION TIMING & GAP / DIFF COLUMNS */}
                       <div className='overflow-hidden'>
                         <div className={`flex flex-row h-full `}>
                           {(rider.df || rider.gp) && control.time && (

@@ -184,7 +184,7 @@ Important guidelines:
 ${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
 
       const response = await ai.models.generateContent({
-        model: "gemma-4-26b-a4b-it", //gemma-4-26b-a4b-it gemini-3.8-flash
+        model: "gemini-3.1-flash-lite", //gemma-4-26b-a4b-it gemini-3.8-flash gemini-3.1-flash-lite
         contents: {
           parts: [
             ...imageParts,

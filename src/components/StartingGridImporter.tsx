@@ -246,7 +246,7 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
           pos: posNum,
           no: rawNo || (idx + 1).toString(),
           nam: rawName || `Racer #${rawNo || idx + 1}`,
-          cb: teamVal || '-',
+          cb: teamVal ? (teamVal.length > 1 ? teamVal : '-') : '-',
           btTm: timeVal || undefined,
         });
       });
@@ -507,7 +507,7 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
           pos: typeof r.pos === 'number' && r.pos > 0 ? r.pos : idx + 1,
           no: String(r.no || idx + 1).trim(),
           nam: String(r.nam || `Racer #${r.no || idx + 1}`).trim(),
-          cb: r.cb ? String(r.cb).trim() : '-',
+          cb: r.cb ? (r.cb.length > 1 ? String(r.cb).trim() : '-') : '-',
           btTm: r.btTm ? String(r.btTm).trim() : undefined,
           tTm: r.tTm ? String(r.tTm).trim() : undefined,
         }))
@@ -552,7 +552,7 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
         fNam: r.nam,
         no: r.no,
         dNo: r.no,
-        cb: r.cb || '-',
+        cb: r.cb ? (r.cb.length > 1 ? r.cb : '-') : '-',
         cl: previewResult.groupName || groupName || 'MANUAL GRID',
         cln: previewResult.groupName || groupName || 'MANUAL GRID',
         lbpos: targetPos,
