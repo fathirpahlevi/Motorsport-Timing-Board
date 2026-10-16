@@ -77,7 +77,11 @@ export interface ControlState {
   diff?: boolean;
   ltg?: boolean;
   video?: boolean;
-  [key: string]: boolean | undefined;
+  racerLap?: boolean;
+  lastLap?: boolean;
+  timingMode?: 'lapCount' | 'lastLap' | 'gap' | 'interval' | 'bestTime';
+  timingVisible?: boolean;
+  [key: string]: boolean | string | undefined;
 }
 
 export interface LowerThirdState {

@@ -1,21 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { ListSelectInput, SelectOption } from './lists';
-import { RiderResult } from '../types';
+import { RiderResult, ControlState } from '../types';
 import { AddRiderModal } from './manualRider';
-
-// Define the shape of the props the component expects
-interface SyncState {
-    laps?: boolean;
-    time?: boolean;
-    input?: boolean;
-    rtmp?: boolean;
-    [key: string]: boolean | undefined;
-}
 
 interface DisplayControllerProps {
     socket: WebSocket | null;
     connectionStatus: string;
-    syncState: SyncState;
+    syncState: ControlState;
     inputVideo: string;
     errorMessage: string;
     inputDevices: SelectOption[];
@@ -104,7 +95,44 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
 
     },[raceLaps]);
 
-    const sendControlCommand = (command: string, state: boolean) => {
+    const timingOptions: Array<{ id: 'lapCount' | 'lastLap' | 'gap' | 'interval' | 'bestTime'; label: string }> = [
+        { id: 'lapCount', label: 'Lap Count' },
+        { id: 'lastLap', label: 'Last Lap' },
+        { id: 'gap', label: 'Gap' },
+        { id: 'interval', label: 'Interval' },
+        { id: 'bestTime', label: 'Best Time' },
+    ];
+
+    const currentTimingMode: 'lapCount' | 'lastLap' | 'gap' | 'interval' | 'bestTime' =
+        (syncState?.timingMode as any) ||
+        (syncState?.best ? 'bestTime' : syncState?.racerLap ? 'lapCount' : syncState?.lastLap ? 'lastLap' : syncState?.gap ? 'gap' : syncState?.diff ? 'interval' : 'gap');
+
+    const isTimingVisible: boolean =
+        syncState?.timingVisible !== undefined ? !!syncState.timingVisible : !!syncState?.time;
+
+    const handleSelectTimingMode = (mode: 'lapCount' | 'lastLap' | 'gap' | 'interval' | 'bestTime') => {
+        sendControlCommand('timingMode', mode);
+        if (mode === 'gap') {
+            sendControlCommand('gap', true);
+            sendControlCommand('diff', false);
+        } else if (mode === 'interval') {
+            sendControlCommand('diff', true);
+            sendControlCommand('gap', false);
+        } else if (mode === 'bestTime') {
+            sendControlCommand('best', true);
+        } else if (mode === 'lapCount') {
+            sendControlCommand('racerLap', true);
+        } else if (mode === 'lastLap') {
+            sendControlCommand('lastLap', true);
+        }
+    };
+
+    const handleToggleTimingVisible = (visible: boolean) => {
+        sendControlCommand('timingVisible', visible);
+        sendControlCommand('time', visible);
+    };
+
+    const sendControlCommand = (command: string, state: boolean | string) => {
     // Guard clause: check if socket is passed and actually open
         if (!socket || socket.readyState !== WebSocket.OPEN) {
             setLocalStatus('Error: Server connection is offline.');
@@ -120,7 +148,7 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
 
         // Send using the parent's WebSocket instance
         socket.send(JSON.stringify(payload));
-        setLocalStatus(`Sent: ${command}`);
+        setLocalStatus(`Sent: ${command} = ${state}`);
     };
     
     const sendStartingGrid= (next : boolean) => {
@@ -382,38 +410,71 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
                     Hide Position
                     </button>
 
-                    <button 
-                    onClick={() => sendControlCommand('best',true)} 
-                    disabled={connectionStatus !== 'connected'}
-                    className="w-full py-3 px-6 text-white font-semibold rounded-lg bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
-                    >
-                    Show Best
-                    </button>
+                    {/* TOWER TIMING COLUMN SELECTOR & DISPLAY */}
+                    <div className="col-span-2 flex flex-col gap-2.5 p-3.5 bg-zinc-100 border border-zinc-300 rounded-xl my-1">
+                      <div className="flex items-center justify-between">
+                        <span className="uppercase text-gray-700 font-bold text-xs tracking-wider">
+                          Tower Timing Column
+                        </span>
+                        <span className={`text-[10px] font-mono uppercase font-bold px-2 py-0.5 rounded ${
+                          isTimingVisible ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-200 text-zinc-600'
+                        }`}>
+                          Status: {isTimingVisible ? 'VISIBLE' : 'HIDDEN'}
+                        </span>
+                      </div>
 
-                    <button 
-                    onClick={() => sendControlCommand('best',false)} 
-                    disabled={connectionStatus !== 'connected'}
-                    className="w-full py-3 px-6 text-white font-semibold rounded-lg bg-rose-500 hover:bg-rose-600 active:bg-rose-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
-                    >
-                    Hide Best
-                    </button>
-                    
-                    <button 
-                    onClick={() => sendControlCommand('time',true)} 
-                    disabled={connectionStatus !== 'connected'}
-                    className="w-full py-3 px-6 text-white font-semibold rounded-lg bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
-                    >
-                    Show Time
-                    </button>
+                      {/* 5 HORIZONTAL SELECTOR BUTTONS */}
+                      <div className="grid grid-cols-5 gap-1.5 w-full">
+                        {timingOptions.map((opt) => {
+                          const isActive = currentTimingMode === opt.id;
+                          return (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={() => handleSelectTimingMode(opt.id)}
+                              disabled={connectionStatus !== 'connected'}
+                              className={`py-2.5 px-1 text-center font-bold text-xs uppercase rounded transition-all cursor-pointer ${
+                                isActive
+                                  ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-400 font-black'
+                                  : 'bg-zinc-200 hover:bg-zinc-300 text-zinc-700'
+                              } disabled:opacity-40 disabled:cursor-not-allowed`}
+                            >
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
 
-                    <button 
-                    onClick={() => sendControlCommand('time',false)} 
-                    disabled={connectionStatus !== 'connected'}
-                    className="w-full py-3 px-6 text-white font-semibold rounded-lg bg-rose-500 hover:bg-rose-600 active:bg-rose-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
-                    >
-                    Hide Time
-                    </button>
-                    
+                      {/* SHOW AND HIDE BUTTONS */}
+                      <div className="grid grid-cols-2 gap-2 mt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleTimingVisible(true)}
+                          disabled={connectionStatus !== 'connected'}
+                          className={`w-full py-2.5 px-4 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                            isTimingVisible
+                              ? 'bg-emerald-600 ring-2 ring-emerald-400 font-black shadow-md'
+                              : 'bg-emerald-500 hover:bg-emerald-600'
+                          } disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed`}
+                        >
+                          Show
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleToggleTimingVisible(false)}
+                          disabled={connectionStatus !== 'connected'}
+                          className={`w-full py-2.5 px-4 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                            !isTimingVisible
+                              ? 'bg-rose-600 ring-2 ring-rose-400 font-black shadow-md'
+                              : 'bg-rose-500 hover:bg-rose-600'
+                          } disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed`}
+                        >
+                          Hide
+                        </button>
+                      </div>
+                    </div>
+
                     <button 
                     onClick={() => {
                         sendControlCommand('ltg',true);
@@ -464,50 +525,6 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
                     className="w-full py-3 px-6 text-white font-semibold rounded-lg bg-rose-500 hover:bg-rose-600 active:bg-rose-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
                     >
                     Hide Video
-                    </button>
-                    
-                    <button 
-                    onClick={() => {setGapDiff("gap");
-                            sendControlCommand("gap",true);
-                            sendControlCommand("diff",false);
-                    }} 
-                    disabled={connectionStatus !== 'connected' || gapDiff === "gap"}
-                    className="w-full py-3 px-6 text-white font-semibold rounded-lg bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-400 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
-                    >
-                    Show Int
-                    </button>
-
-                    <button 
-                    onClick={() => {setGapDiff("diff");
-                            sendControlCommand("diff",true);
-                            sendControlCommand("gap",false);}} 
-                    disabled={connectionStatus !== 'connected' || gapDiff === "diff"}
-                    className="w-full py-3 px-6 text-white font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 active:bg-amber-500 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
-                    >
-                    Show Gap
-                    </button>
-
-                    <h1 className='col-span-2 uppercase text-gray-700 font-bold'>Lap Per Racer</h1>
-
-                    <button 
-                    onClick={() => {
-                        sendControlCommand('racerLap',true);
-                    }
-                    } 
-                    disabled={connectionStatus !== 'connected'}
-                    className="w-full py-3 px-6 text-white font-semibold rounded-lg bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
-                    >
-                    SHOW
-                    </button>
-
-                    <button 
-                    onClick={() => {
-                        sendControlCommand('racerLap',false);
-                    }} 
-                    disabled={connectionStatus !== 'connected'}
-                    className="w-full py-3 px-6 text-white font-semibold rounded-lg bg-rose-500 hover:bg-rose-600 active:bg-rose-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
-                    >
-                    HIDE
                     </button>
                     
                     <h1 className='col-span-2 uppercase text-gray-700 font-bold'>Banner Control</h1>

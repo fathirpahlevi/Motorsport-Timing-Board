@@ -443,7 +443,14 @@ export default function App() {
   }, [signalRLogs]);
   
   const injectSignalRPacket = (packetObj: SignalRPacket) => {
-    if (!packetObj || !Array.isArray(packetObj.results)) {
+    const incomingResults = packetObj && (
+      Array.isArray(packetObj.results)
+        ? packetObj.results
+        : Array.isArray((packetObj as any).l)
+        ? (packetObj as any).l
+        : null
+    );
+    if (!incomingResults) {
       addWebSocketLog('system', "❌ SignalR Error: results is not a valid array");
       return;
     }
@@ -458,7 +465,11 @@ export default function App() {
       let overtakeHappened = false;
       const rawGapsMap = new Map<string, { gp?: string; df?: string }>();
 
-      const mergedRiders = packetObj.results.map((incoming) => {
+      // Check if incoming packet explicitly designates a fastest rider via ibt: true
+      const incomingBestRider = incomingResults.find((r: any) => r.ibt === true);
+      let incomingFastestId: string | null = incomingBestRider ? incomingBestRider.id : null;
+
+      const mergedRiders = incomingResults.map((incoming: any) => {
         rawGapsMap.set(incoming.id, { gp: incoming.gp, df: incoming.df });
 
         const existing = riderMap.get(incoming.id);
@@ -483,17 +494,19 @@ export default function App() {
           }
         }
 
-        let isAbsoluteFastest = false;
         if (incoming.btTm) {
           const incomingMs = parseLapTimeToMs(incoming.btTm);
           const currentBestMs = parseLapTimeToMs(sessionBestTime);
           if (incomingMs < currentBestMs && incomingMs > 10000) {
             setSessionBestTime(incoming.btTm);
             setSessionBestRider(incoming.nam);
-            isAbsoluteFastest = true;
             sessionBestImproved = true;
+            incomingFastestId = incoming.id;
           }
         }
+
+        // When incoming.ibt becomes false or is omitted, do NOT retain stale true
+        const resolvedIbt = incoming.ibt === true;
 
         return {
           ...existing,
@@ -501,11 +514,11 @@ export default function App() {
           prevPos: originalPos,
           changeTime,
           changeDirection,
-          ibt: isAbsoluteFastest ? true : (incoming.ibt || (existing ? existing.ibt : false))
+          ibt: resolvedIbt
         } as RiderResult;
       });
 
-      const incomingIds = new Set(packetObj.results.map(r => r.id));
+      const incomingIds = new Set(incomingResults.map((r: any) => r.id));
       const omittedRiders = prevRiders.filter(
         (r) => !incomingIds.has(r.id) && r.sesId !== 'ses_ycr1_ycr2_expert_novice' && !r.id.startsWith('manual-rider-')
       );
@@ -524,7 +537,32 @@ export default function App() {
         }
         return rider;
       });
-      // console.log("new Data", finalPack);
+
+      // Strictly ensure ONLY the single overall fastest racer has ibt: true, and all others are false
+      let fastestMs = Infinity;
+      let fastestRiderId: string | null = incomingFastestId;
+      if (!fastestRiderId) {
+        finalPack.forEach((r) => {
+          if (r.btTm) {
+            const ms = parseLapTimeToMs(r.btTm);
+            if (ms > 5000 && ms < fastestMs) {
+              fastestMs = ms;
+              fastestRiderId = r.id;
+            }
+          }
+        });
+      }
+      if (!fastestRiderId) {
+        const signalrBest = finalPack.find((r) => r.ibt);
+        if (signalrBest) fastestRiderId = signalrBest.id;
+      }
+
+      const cleanedPack = finalPack.map((rider) => ({
+        ...rider,
+        ibt: fastestRiderId !== null ? rider.id === fastestRiderId : false,
+      }));
+
+      // console.log("new Data", cleanedPack);
       if (sessionBestImproved) {
         playBeep('bestlap');
       } else if (overtakeHappened) {
@@ -533,7 +571,7 @@ export default function App() {
         playBeep('tick');
       }
 
-      liveSpeedhiveRidersRef.current = finalPack;
+      liveSpeedhiveRidersRef.current = cleanedPack;
       hasLiveSpeedhiveDataRef.current = true;
 
       if (isManualModeRef.current) {
@@ -541,7 +579,7 @@ export default function App() {
         return prevRiders;
       }
 
-      return finalPack;
+      return cleanedPack;
     });
   };
   // Fetch initial Speedhive timing state via Express API proxy to bypass CORS
@@ -585,7 +623,23 @@ export default function App() {
 
       const sorted = recalculateGaps(data.l);
 
-      // Restore initial raw gap strings
+      let fastestInitMs = Infinity;
+      let fastestInitId: string | null = null;
+      data.l.forEach((r: RiderResult) => {
+        if (r.btTm) {
+          const ms = parseLapTimeToMs(r.btTm);
+          if (ms > 5000 && ms < fastestInitMs) {
+            fastestInitMs = ms;
+            fastestInitId = r.id;
+          }
+        }
+      });
+      if (!fastestInitId) {
+        const found = data.l.find((r: RiderResult) => r.ibt || (data.btLpTim && r.btTm === data.btLpTim));
+        if (found) fastestInitId = found.id;
+      }
+
+      // Restore initial raw gap strings and ensure only single fastest has ibt: true
       const finalInitialData = sorted.map((rider) => {
         const rawGaps = rawGapsMap.get(rider.id);
         return {
@@ -594,6 +648,7 @@ export default function App() {
           df: rawGaps?.df ?? rider.df,
           gpCl: rawGaps?.gp ?? rider.gpCl,
           dfCl: rawGaps?.df ?? rider.dfCl,
+          ibt: fastestInitId !== null ? rider.id === fastestInitId : false,
         };
       });
 
@@ -828,7 +883,26 @@ export default function App() {
               if (typeof data.f === "number") setFlag(data.f);
 
               if (Array.isArray(data.l)) {
-                const sorted = recalculateGaps(data.l);
+                let fMs = Infinity;
+                let fId: string | null = null;
+                data.l.forEach((r: RiderResult) => {
+                  if (r.btTm) {
+                    const ms = parseLapTimeToMs(r.btTm);
+                    if (ms > 5000 && ms < fMs) {
+                      fMs = ms;
+                      fId = r.id;
+                    }
+                  }
+                });
+                if (!fId) {
+                  const b = data.l.find((r: RiderResult) => r.ibt || (data.btLpTim && r.btTm === data.btLpTim));
+                  if (b) fId = b.id;
+                }
+                const formatted = data.l.map((r: RiderResult) => ({
+                  ...r,
+                  ibt: fId !== null ? r.id === fId : false,
+                }));
+                const sorted = recalculateGaps(formatted);
                 liveSpeedhiveRidersRef.current = sorted;
                 hasLiveSpeedhiveDataRef.current = true;
                 if (!isManualModeRef.current) {
@@ -841,8 +915,12 @@ export default function App() {
           } else if (message.type === "resultsForSessionReceived") {
             addWebSocketLog('in', `📥 resultsForSessionReceived websocket frame parsed`);
             const data = message.data;
-            if (data && Array.isArray(data.results)) {
-              injectSignalRPacket(data);
+            if (data) {
+              if (Array.isArray(data.results)) {
+                injectSignalRPacket(data);
+              } else if (Array.isArray(data.l)) {
+                injectSignalRPacket({ results: data.l, target: 'resultsForSessionReceived', arguments: [data] });
+              }
             }
           } else if (message.type === "sessionAddedOrUpdated") {
             addWebSocketLog('in', `🔔 Feed event: sessionAddedOrUpdated`);
@@ -926,7 +1004,26 @@ export default function App() {
               if (resData && Array.isArray(resData.results)) {
                 injectSignalRPacket(resData);
               } else if (resData && Array.isArray(resData.l)) {
-                const sorted = recalculateGaps(resData.l);
+                let fMs = Infinity;
+                let fId: string | null = null;
+                resData.l.forEach((r: RiderResult) => {
+                  if (r.btTm) {
+                    const ms = parseLapTimeToMs(r.btTm);
+                    if (ms > 5000 && ms < fMs) {
+                      fMs = ms;
+                      fId = r.id;
+                    }
+                  }
+                });
+                if (!fId) {
+                  const b = resData.l.find((r: RiderResult) => r.ibt || (resData.btLpTim && r.btTm === resData.btLpTim));
+                  if (b) fId = b.id;
+                }
+                const formatted = resData.l.map((r: RiderResult) => ({
+                  ...r,
+                  ibt: fId !== null ? r.id === fId : false,
+                }));
+                const sorted = recalculateGaps(formatted);
                 liveSpeedhiveRidersRef.current = sorted;
                 hasLiveSpeedhiveDataRef.current = true;
                 if (!message.raceState.isManualMode) {

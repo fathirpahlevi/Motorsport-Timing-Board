@@ -343,11 +343,67 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                       : ''
                     : '';
 
+                  const activeTimingMode: 'lapCount' | 'lastLap' | 'gap' | 'interval' | 'bestTime' = 
+                    (control.timingMode as any) || (control.best ? 'bestTime' : control.racerLap ? 'lapCount' : control.lastLap ? 'lastLap' : control.diff ? 'interval' : control.gap ? 'gap' : 'gap');
+
+                  const isTimingVisible = control.timingVisible !== undefined ? !!control.timingVisible : !!control.time;
+
+                  let shouldShowForThisRider = isTimingVisible;
+                  let timingContent: React.ReactNode = null;
+
+                  if (activeTimingMode === 'lapCount') {
+                    timingContent = (
+                      <div className="h-full font-mono text-xl text-black tracking-tight leading-none flex items-center justify-end gap-1">
+                        <span className="font-sans text-[11px] font-bold text-zinc-500 uppercase mr-0.5">LAP</span>
+                        <span>{rider.ls !== undefined && rider.ls !== null ? rider.ls : '-'}</span>
+                      </div>
+                    );
+                  } else if (activeTimingMode === 'lastLap') {
+                    timingContent = (
+                      <div className="h-full font-mono text-base font-bold text-black tracking-tight leading-none flex items-center justify-end gap-1">
+                        <span className="font-sans text-[10px] font-bold text-zinc-500 uppercase mr-0.5">LAST</span>
+                        <span>{rider.lsTm || '-'}</span>
+                      </div>
+                    );
+                  } else if (activeTimingMode === 'gap') {
+                    timingContent = (
+                      <div className="h-full font-mono text-xl text-black tracking-tight leading-none flex items-center justify-end">
+                        {isLeader ? (
+                          <span className="font-sans text-sm font-black tracking-wider uppercase text-black">GAP</span>
+                        ) : (
+                          formatDeltaTime(rider.gp, isLeader)
+                        )}
+                      </div>
+                    );
+                  } else if (activeTimingMode === 'interval') {
+                    timingContent = (
+                      <div className="h-full font-mono text-xl text-black tracking-tight leading-none flex items-center justify-end">
+                        {isLeader ? (
+                          <span className="font-sans text-xs font-black tracking-wider uppercase text-black">INTERVAL</span>
+                        ) : (
+                          formatDeltaTime(rider.df, isLeader)
+                        )}
+                      </div>
+                    );
+                  } else if (activeTimingMode === 'bestTime') {
+                    // Only show best time for the single current fastest racer (where rider.ibt === true)
+                    if (rider.ibt && rider.btTm) {
+                      timingContent = (
+                        <div className="h-full flex items-center justify-end gap-1 text-black leading-none">
+                          <span className="font-sans text-[10px] font-black text-amber-700 uppercase tracking-wider mr-0.5">BEST</span>
+                          <span className="font-mono text-base font-black tracking-tight">{rider.btTm}</span>
+                        </div>
+                      );
+                    } else {
+                      shouldShowForThisRider = false;
+                    }
+                  }
+
                   return (
                     <motion.div
                       layoutId={`rider-row-${rider.id}`}
                       key={rider.id}
-                      className={`my-0 w-full flex items-center flex-row border-transparent`}
+                      className={`my-0 w-full flex items-center flex-row border-transparent relative`}
                       id={`rider-row-${rider.id}`}
                       onClick={() => {
                         if (setSelectedRiderId) {
@@ -358,7 +414,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                         }
                       }}
                     >
-                      <div className={`flex items-center grid-cols-7 w-[240px] h-full grid border-transparent`}>
+                      <div className={`flex items-center grid-cols-7 w-[240px] h-full grid border-transparent relative z-20 bg-zinc-100 shadow-xs`}>
                         <div className="top-0 h-[30px]">
                         {(!rider.changeDirection || rider.changeDirection === 'steady') && (
                           
@@ -413,47 +469,22 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
 
                       </div>
 
-                      {/* INFORMATION TIMING & GAP / DIFF COLUMNS */}
-                      <div className='overflow-hidden'>
-                        <div className={`flex flex-row h-full `}>
-                          {(rider.df || rider.gp) && control.time && (
-                            <div
-                              className={`${control.time ? 'translate-x-[0%] transition-transform duration-300 ease-in-out' : '-translate-x-[100%] transition-transform duration-300 ease-in-out'}
-                              } w-[125px] h-full text-right flex flex-col justify-center bg-zinc-200 px-2 py-1.5 gap-1 z-10`}
+                      {/* INFORMATION TIMING & GAP / DIFF COLUMNS (Slides from behind racer name) */}
+                      <div className="relative z-10 overflow-hidden h-full flex items-center pointer-events-none">
+                        <AnimatePresence>
+                          {shouldShowForThisRider && (
+                            <motion.div
+                              key={`timing-badge-${rider.id}`}
+                              initial={{ x: '-100%' }}
+                              animate={{ x: '0%' }}
+                              exit={{ x: '-100%' }}
+                              transition={{ duration: 0.35, ease: 'easeInOut' }}
+                              className="w-[125px] h-full text-right flex flex-col justify-center bg-zinc-200 px-2 py-1.5 z-10 border-l border-zinc-300 pointer-events-auto"
                             >
-                              <div className="h-full font-mono text-xl text-black tracking-tight leading-none">
-                                {isLeader ? control.gap
-                                    ? 'INTERVAL' : 'GAP'
-                                      : control.gap ? formatDeltaTime(rider.gp, isLeader)
-                                        : control.diff ? formatDeltaTime(rider.df, isLeader)
-                                          : rider.df ? formatDeltaTime(rider.dfCl, isLeader)
-                                            : '-'}
-                                            
-                                {/* {rider.lsTm ? `L:${rider.lsTm}` : '-'} */}
-                              </div>
-                            </div>
+                              {timingContent}
+                            </motion.div>
                           )}
-              
-                          {/* {rider.btTm && rider.ibt && ( */}
-                          {(rider.btTm && control.best) && (
-                            <div
-                              className={`${
-                                control.best ? control.time ? 'translate-x-[0%] transition-transform duration-300 ease-in-out' : 'translate-x-[100%] transition-transform duration-300 ease-in-out' : '-translate-x-[100%] transition-transform duration-300 ease-in-out'
-                              } text-left flex flex-row text-lg py-1.5 font-black leading-none uppercase tracking-tight items-center justify-end gap-1 border-zinc-800 px-2 bg-zinc-200 border-transparent text-black z-2`}
-                            >
-                              <span className="font-mono text-black font-light tracking-tight">{laps === 2 ? 'Last lap:' : 'Best:'}</span> {rider.btTm}
-                            </div>
-                          )}
-                          {rider.ls && (
-                            <div
-                              className={`${
-                                control.racerLap ? control.time ? control.best ?'translate-x-[0%] transition-transform duration-300 ease-in-out' : '-translate-x-[0%] transition-transform duration-300 ease-in-out' : 'translate-x-[0%] transition-transform duration-300 ease-in-out' : '-translate-x-[100%] transition-transform duration-300 ease-in-out'
-                              } text-left flex flex-row text-lg py-1.5 font-black leading-none uppercase tracking-tight items-center justify-end gap-1 border-zinc-800 px-2 bg-zinc-200 border-transparent text-black z-1`}
-                            >
-                              <span className="font-mono text-black font-light tracking-tight">lap: </span>{rider.ls}
-                            </div>
-                          )}
-                        </div>
+                        </AnimatePresence>
                       </div>
                     </motion.div>
                   );
