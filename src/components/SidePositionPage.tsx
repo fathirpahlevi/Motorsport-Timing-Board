@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronUp, ChevronDown } from 'lucide-react';
 import { RiderResult, ControlState } from '../types';
+import { getPagedRiders, isRiderDnf } from '../data';
 import { SelectOption } from './lists';
 import { WebRTCVideoPlayer } from './rtmpVideo';
 
@@ -321,10 +322,18 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
         <section className={`w-full flex flex-col ${control.position ? '' :'-translate-y-[120%] transition-transform duration-1000 ease-out'}`} id="leaderboard-section">
           <div className="w-full relative" id="riders-reordering-list">
             <AnimatePresence initial={false}>
-              {riders.length === 0 ? (
-                <div className="text-zinc-100 flex flex-col gap-4 animate-fade-in animate-pulse">-</div>
-              ) : (
-                riders.map((rider, index) => {
+              {(() => {
+                const activePageIndex = typeof control.sidePositionPage === 'number' ? control.sidePositionPage : 0;
+                const paged = getPagedRiders(riders, activePageIndex);
+                const displayedRiders = paged.displayedRiders;
+
+                if (displayedRiders.length === 0) {
+                  return (
+                    <div className="text-zinc-100 flex flex-col gap-4 animate-fade-in animate-pulse">-</div>
+                  );
+                }
+
+                return displayedRiders.map((rider, index) => {
                   const showUI = { gap: false, gapTime: 0, diff: false };
                   if (typeof rider.df === 'number') {
                     if (rider.df >= 4 && rider.df < 5) {
@@ -332,10 +341,11 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                     }
                   }
                   const isLeader = index === 0;
+                  const isDnf = isRiderDnf(rider);
 
                   // Highlight flashes on position swap
                   const isRecentlyChanged = rider.changeTime && Date.now() - rider.changeTime < 1300;
-                  const flashClass = isRecentlyChanged
+                  const flashClass = !isDnf && isRecentlyChanged
                     ? rider.changeDirection === 'up'
                       ? 'border-x-4 pointer border-l-emerald-600 border-r-emerald-600'
                       : rider.changeDirection === 'down'
@@ -368,26 +378,26 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                   } else if (activeTimingMode === 'gap') {
                     timingContent = (
                       <div className="h-full font-mono text-xl text-black tracking-tight leading-none flex items-center justify-end">
-                        {isLeader ? (
+                        {isDnf ? '-' : (isLeader ? (
                           <span className="font-sans text-sm font-black tracking-wider uppercase text-black">GAP</span>
                         ) : (
                           formatDeltaTime(rider.gp, isLeader)
-                        )}
+                        ))}
                       </div>
                     );
                   } else if (activeTimingMode === 'interval') {
                     timingContent = (
                       <div className="h-full font-mono text-xl text-black tracking-tight leading-none flex items-center justify-end">
-                        {isLeader ? (
+                        {isDnf ? '-' : (isLeader ? (
                           <span className="font-sans text-xs font-black tracking-wider uppercase text-black">INTERVAL</span>
                         ) : (
                           formatDeltaTime(rider.df, isLeader)
-                        )}
+                        ))}
                       </div>
                     );
                   } else if (activeTimingMode === 'bestTime') {
                     // Only show best time for the single current fastest racer (where rider.ibt === true)
-                    if (rider.ibt && rider.btTm) {
+                    if (rider.ibt && rider.btTm && !isDnf) {
                       timingContent = (
                         <div className="h-full flex items-center justify-end gap-1 text-black leading-none">
                           <span className="font-sans text-[10px] font-black text-amber-700 uppercase tracking-wider mr-0.5">BEST</span>
@@ -421,30 +431,38 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                           <img
                             src={finishFlagUrl} // Path from public/ directory
                             alt="Finish flag"
-                            className={`${rider.if ? '' : 'hidden '}h-[40px] drop-shadow-2xl col-span-1 z-20 pointer-events-none`}
+                            className={`${rider.if && !isDnf ? '' : 'hidden '}h-[40px] drop-shadow-2xl col-span-1 z-20 pointer-events-none`}
                           />
                           )}
                           </div>
                         {/* POSITION & ARROW */}
                         <div className={`col-span-1 border-transparent flex items-center justify-center h-full bg-zinc-100 ${flashClass}`}>
-                          
-                          <div>
-                            {rider.changeDirection === 'up' && (
-                              <ChevronUp className="w-7 h-7 text-emerald-600" />
-                            )}
-                            {rider.changeDirection === 'down' && (
-                              <ChevronDown className="w-7 h-7 text-red-500" />
-                            )}
-                            {(!rider.changeDirection ||
-                              (rider.changeDirection !== 'up' && rider.changeDirection !== 'down')) && (
-                              <span
-                                className="text-black text-xl font-bold"
-                                id={`rider-pos-${rider.id}`}
-                              >
-                                {rider.pos || index + 1}
-                              </span>
-                            )}
-                          </div>
+                          {isDnf ? (
+                            <span
+                              className="text-rose-600 text-xs font-black tracking-tight uppercase"
+                              id={`rider-pos-${rider.id}`}
+                            >
+                              DNF
+                            </span>
+                          ) : (
+                            <div>
+                              {rider.changeDirection === 'up' && (
+                                <ChevronUp className="w-7 h-7 text-emerald-600" />
+                              )}
+                              {rider.changeDirection === 'down' && (
+                                <ChevronDown className="w-7 h-7 text-red-500" />
+                              )}
+                              {(!rider.changeDirection ||
+                                (rider.changeDirection !== 'up' && rider.changeDirection !== 'down')) && (
+                                <span
+                                  className="text-black text-xl font-bold"
+                                  id={`rider-pos-${rider.id}`}
+                                >
+                                  {rider.pos || (rider.lbpos ? String(rider.lbpos) : String(index + 1))}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         {/* RIDER NAME / TEAM */}
@@ -488,8 +506,8 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                       </div>
                     </motion.div>
                   );
-                })
-              )}
+                });
+              })()}
             </AnimatePresence>
           </div>
         </section>

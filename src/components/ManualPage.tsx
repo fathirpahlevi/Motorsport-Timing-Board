@@ -321,23 +321,43 @@
         const updated = riders.map((r) => {
         if (r.id === editingRiderId) {
             const merged = { ...r, ...editForm };
-            const posInt = editForm.pos ? parseInt(editForm.pos, 10) || r.lbpos : r.lbpos;
+            const isDnf = typeof editForm.pos === 'string' && editForm.pos.trim().toUpperCase() === 'DNF';
+            const posInt = isDnf ? 999 : (editForm.pos ? parseInt(editForm.pos, 10) || r.lbpos : r.lbpos);
             return {
             ...merged,
             lbpos: posInt,
-            pos: posInt.toString(),
-            pCl: posInt.toString(),
+            pos: isDnf ? 'DNF' : posInt.toString(),
+            pCl: isDnf ? 'DNF' : (merged.pCl === 'DNF' ? 'DNF' : posInt.toString()),
             };
         }
         return r;
-        }).sort((a, b) => a.lbpos - b.lbpos);
+        }).sort((a, b) => {
+            const isDnfA = a.pos === 'DNF' || a.pCl === 'DNF';
+            const isDnfB = b.pos === 'DNF' || b.pCl === 'DNF';
+            if (isDnfA && !isDnfB) return 1;
+            if (!isDnfA && isDnfB) return -1;
+            return a.lbpos - b.lbpos;
+        });
 
-        const reindexed = updated.map((r, idx) => ({
-        ...r,
-        lbpos: idx + 1,
-        pos: (idx + 1).toString(),
-        pCl: (idx + 1).toString(),
-        }));
+        let activeIdx = 0;
+        const reindexed = updated.map((r) => {
+          const isDnf = r.pos === 'DNF' || r.pCl === 'DNF';
+          if (isDnf) {
+            return {
+              ...r,
+              lbpos: 999,
+              pos: 'DNF',
+              pCl: 'DNF',
+            };
+          }
+          activeIdx++;
+          return {
+            ...r,
+            lbpos: activeIdx,
+            pos: activeIdx.toString(),
+            pCl: (r.pCl && isNaN(Number(r.pCl)) && r.pCl !== 'DNF' ? r.pCl : activeIdx.toString()),
+          };
+        });
 
         const finalRiders = recalculateGaps(reindexed);
         setRiders(finalRiders);
@@ -810,10 +830,11 @@
                             <tr key={racer.id} className="bg-blue-950/40">
                             <td className="py-3 px-3 text-center">
                                 <input
-                                type="number"
-                                value={editForm.pos ?? racer.lbpos}
+                                type="text"
+                                value={editForm.pos ?? racer.pos ?? racer.lbpos}
                                 onChange={(e) => setEditForm({ ...editForm, pos: e.target.value })}
-                                className="w-12 bg-zinc-950 border border-zinc-700 rounded px-1.5 py-1 text-center font-bold text-white"
+                                className="w-14 bg-zinc-950 border border-zinc-700 rounded px-1.5 py-1 text-center font-bold text-white uppercase"
+                                placeholder="1 or DNF"
                                 />
                             </td>
                             <td className="py-3 px-3 text-center">
@@ -895,7 +916,7 @@
                         return (
                         <tr key={racer.id} className="hover:bg-zinc-800/40 transition-colors">
                             <td className="py-3 px-3 text-center font-bold text-white text-sm">
-                            {racer.lbpos || idx + 1}
+                            {racer.pos === 'DNF' ? <span className="text-rose-500 font-bold">DNF</span> : (racer.pos || racer.lbpos || idx + 1)}
                             </td>
                             <td className="py-3 px-3 text-center">
                             <span className="bg-blue-900/80 text-white font-bold px-2 py-0.5 rounded italic">

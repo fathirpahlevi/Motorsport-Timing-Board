@@ -1486,7 +1486,8 @@ export default function App() {
           raceTitle={raceTitle}
           sessionName={sessionName}
           groupName={groupName}
-          finishedPages={finishedPages}/>
+          finishedPages={finishedPages}
+          riders={riders}/>
         } />
         <Route 
             path="/sidePosition" 

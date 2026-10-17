@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { ListSelectInput, SelectOption } from './lists';
 import { RiderResult, ControlState } from '../types';
+import { getPagedRiders } from '../data';
 import { AddRiderModal } from './manualRider';
 
 interface DisplayControllerProps {
@@ -18,6 +19,7 @@ interface DisplayControllerProps {
     globalLaps: number;
     globalLtg: number;
     finishedPages: number;
+    riders?: RiderResult[];
 }
 
 export const DisplayController: React.FC<DisplayControllerProps> = ({ 
@@ -34,7 +36,8 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
     globalRaceLaps, 
     globalLaps, 
     globalLtg,
-    finishedPages}) => {
+    finishedPages,
+    riders = []}) => {
     const [localStatus, setLocalStatus] = useState<string>('Ready');
     const [gapDiff,setGapDiff] = useState<'gap'|'diff'>('diff');
     const [speedhiveUrl,setSpeedhiveUrl] = useState<string>('');
@@ -132,7 +135,21 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
         sendControlCommand('time', visible);
     };
 
-    const sendControlCommand = (command: string, state: boolean | string) => {
+    const currentTowerPage: number = typeof syncState?.sidePositionPage === 'number' ? syncState.sidePositionPage : 0;
+    const towerPagination = getPagedRiders(riders || [], currentTowerPage);
+
+    const handlePrevTowerPage = () => {
+        const newPage = Math.max(0, currentTowerPage - 1);
+        sendControlCommand('sidePositionPage', newPage);
+    };
+
+    const handleNextTowerPage = () => {
+        const maxPage = towerPagination.totalPages > 0 ? towerPagination.totalPages - 1 : currentTowerPage + 1;
+        const newPage = Math.min(maxPage, currentTowerPage + 1);
+        sendControlCommand('sidePositionPage', newPage);
+    };
+
+    const sendControlCommand = (command: string, state: boolean | string | number) => {
     // Guard clause: check if socket is passed and actually open
         if (!socket || socket.readyState !== WebSocket.OPEN) {
             setLocalStatus('Error: Server connection is offline.');
@@ -471,6 +488,44 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
                           } disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed`}
                         >
                           Hide
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* TOWER RACERS PAGINATION CONTROL (MAX 19) */}
+                    <div className="col-span-2 flex flex-col gap-2.5 p-3.5 bg-zinc-100 border border-zinc-300 rounded-xl my-1">
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-col">
+                          <span className="uppercase text-gray-700 font-bold text-xs tracking-wider">
+                            Tower Racers Display ({riders?.length || 0} Racers Total)
+                          </span>
+                          <span className="text-[11px] text-zinc-500 font-medium">
+                            Max 19 racers on screen • {towerPagination.pageRangeText ? `Showing: P${towerPagination.pageRangeText}` : 'All shown'}
+                          </span>
+                        </div>
+                        <span className="text-xs font-mono font-bold bg-blue-100 text-blue-800 px-2.5 py-1 rounded-md border border-blue-200">
+                          Page {towerPagination.currentPage + 1} / {towerPagination.totalPages}
+                        </span>
+                      </div>
+
+                      {/* SIMPLE PREVIOUS AND NEXT BUTTONS */}
+                      <div className="grid grid-cols-2 gap-2 mt-0.5">
+                        <button
+                          type="button"
+                          onClick={handlePrevTowerPage}
+                          disabled={connectionStatus !== 'connected' || towerPagination.currentPage <= 0}
+                          className="w-full py-3 px-4 text-white font-bold text-xs uppercase tracking-wider rounded-lg bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          ◀ Previous
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleNextTowerPage}
+                          disabled={connectionStatus !== 'connected' || towerPagination.currentPage >= towerPagination.totalPages - 1}
+                          className="w-full py-3 px-4 text-white font-bold text-xs uppercase tracking-wider rounded-lg bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          Next ▶
                         </button>
                       </div>
                     </div>

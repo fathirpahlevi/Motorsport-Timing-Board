@@ -367,11 +367,23 @@ export function parseLapTimeToMs(timeStr: string | undefined | null): number {
   return 0;
 }
 
+export function isRiderDnf(rider: RiderResult): boolean {
+  if (!rider) return false;
+  const posUpper = typeof rider.pos === 'string' ? rider.pos.trim().toUpperCase() : '';
+  const pClUpper = typeof rider.pCl === 'string' ? rider.pCl.trim().toUpperCase() : '';
+  return posUpper === 'DNF' || pClUpper === 'DNF' || posUpper.includes('DNF') || pClUpper.includes('DNF');
+}
+
 export function recalculateGaps(riders: RiderResult[]): RiderResult[] {
   if (riders.length === 0) return [];
 
-  // Sort list by lbpos or numerical pos
+  // Sort list: active non-DNF racers first (by lbpos or numeric pos), then DNF racers at the end
   const sorted = [...riders].sort((a, b) => {
+    const isDnfA = isRiderDnf(a);
+    const isDnfB = isRiderDnf(b);
+    if (isDnfA && !isDnfB) return 1;
+    if (!isDnfA && isDnfB) return -1;
+
     const posA = a.lbpos ?? (parseInt(a.pos, 10) || 999);
     const posB = b.lbpos ?? (parseInt(b.pos, 10) || 999);
     return posA - posB;
@@ -380,15 +392,29 @@ export function recalculateGaps(riders: RiderResult[]): RiderResult[] {
   const leaderTimeStr = sorted[0]?.tTm;
   const leaderMs = parseLapTimeToMs(leaderTimeStr);
 
+  let activeIndex = 0;
   return sorted.map((rider, index) => {
-    const posInt = index + 1;
-    const posStr = posInt.toString();
+    const isDnf = isRiderDnf(rider);
+    let posStr: string;
+    let posInt: number;
+
+    if (isDnf) {
+      posStr = "DNF";
+      posInt = rider.lbpos && rider.lbpos > 900 ? rider.lbpos : 990 + index;
+    } else {
+      activeIndex++;
+      posInt = activeIndex;
+      posStr = posInt.toString();
+    }
 
     // Preserve existing raw string gaps if available and valid (e.g., "1 Lap", "0.238", etc.)
     let gpStr = rider.gp;
     let dfStr = rider.df;
 
-    if (index === 0) {
+    if (isDnf) {
+      gpStr = "-";
+      dfStr = "-";
+    } else if (index === 0) {
       gpStr = "LEADER";
       dfStr = "-";
     } else {
@@ -412,13 +438,75 @@ export function recalculateGaps(riders: RiderResult[]): RiderResult[] {
       ...rider,
       lbpos: posInt,
       pos: posStr,
-      pCl: posStr,
+      pCl: isDnf ? "DNF" : (rider.pCl && isNaN(Number(rider.pCl)) && rider.pCl !== 'DNF' ? rider.pCl : posStr),
       gp: gpStr || "-",
       df: dfStr || "-",
       gpCl: gpStr || "-",
       dfCl: dfStr || "-"
     };
   });
+}
+
+export interface PagedRidersResult {
+  displayedRiders: RiderResult[];
+  currentPage: number;
+  totalPages: number;
+  fixedCount: number;
+  windowSize: number;
+  pageRangeText: string;
+}
+
+/**
+ * Limits tower display to a maximum of 19 racers.
+ * - Total <= 19: All racers displayed (Page 1/1, 1-N).
+ * - Total 20..26: Top 15 racers fixed (1-15), remaining slots (4) windowed (Page 0: 1-19, Page 1: 1-15 & 20-23, Page 2: 1-15 & 24-N).
+ * - Total > 26: Top 10 racers fixed (1-10), remaining slots (9) windowed (Page 0: 1-19, Page 1: 1-10 & 20-28, Page 2: 1-10 & 29-N).
+ */
+export function getPagedRiders(riders: RiderResult[], requestedPage: number = 0): PagedRidersResult {
+  const total = riders.length;
+  if (total <= 19) {
+    return {
+      displayedRiders: riders,
+      currentPage: 0,
+      totalPages: 1,
+      fixedCount: total,
+      windowSize: 0,
+      pageRangeText: total > 0 ? `1-${total}` : '0',
+    };
+  }
+
+  const isBetween20And26 = total <= 26;
+  const fixedCount = isBetween20And26 ? 15 : 10;
+  const windowSize = isBetween20And26 ? 4 : 9;
+
+  const remainingTotal = total - fixedCount;
+  const totalPages = Math.max(1, Math.ceil(remainingTotal / windowSize));
+  const currentPage = Math.max(0, Math.min(requestedPage, totalPages - 1));
+
+  const fixedRiders = riders.slice(0, fixedCount);
+  const windowStart = fixedCount + currentPage * windowSize;
+  const windowEnd = windowStart + windowSize;
+  const windowRiders = riders.slice(windowStart, windowEnd);
+
+  const displayedRiders = [...fixedRiders, ...windowRiders];
+
+  let pageRangeText = '';
+  if (currentPage === 0) {
+    pageRangeText = `1-${Math.min(19, total)}`;
+  } else {
+    const winStartPos = windowStart + 1;
+    const winEndPos = Math.min(windowEnd, total);
+    pageRangeText = `1-${fixedCount} & ${winStartPos}-${winEndPos}`;
+  }
+
+  return {
+    displayedRiders,
+    currentPage,
+    totalPages,
+    fixedCount,
+    windowSize,
+    pageRangeText,
+  };
 }
 
 export interface ManualRiderInput {

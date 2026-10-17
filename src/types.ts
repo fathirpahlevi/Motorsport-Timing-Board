@@ -81,7 +81,8 @@ export interface ControlState {
   lastLap?: boolean;
   timingMode?: 'lapCount' | 'lastLap' | 'gap' | 'interval' | 'bestTime';
   timingVisible?: boolean;
-  [key: string]: boolean | string | undefined;
+  sidePositionPage?: number;
+  [key: string]: boolean | string | number | undefined;
 }
 
 export interface LowerThirdState {
