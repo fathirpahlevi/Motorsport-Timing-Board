@@ -367,44 +367,43 @@ export function parseLapTimeToMs(timeStr: string | undefined | null): number {
   return 0;
 }
 
+export const TERMINAL_STATUS_STATES: string[] = ['DNF', 'DNS', 'DSQ', 'DNQ', 'Ret', 'NC'];
+
 export function isRiderDnf(rider: RiderResult): boolean {
   if (!rider) return false;
+  if (rider.status && TERMINAL_STATUS_STATES.includes(rider.status)) {
+    return true;
+  }
   const posUpper = typeof rider.pos === 'string' ? rider.pos.trim().toUpperCase() : '';
   const pClUpper = typeof rider.pCl === 'string' ? rider.pCl.trim().toUpperCase() : '';
-  return posUpper === 'DNF' || pClUpper === 'DNF' || posUpper.includes('DNF') || pClUpper.includes('DNF');
+  return TERMINAL_STATUS_STATES.some(st => posUpper === st || pClUpper === st || posUpper.includes(st) || pClUpper.includes(st));
 }
 
 export function recalculateGaps(riders: RiderResult[]): RiderResult[] {
   if (riders.length === 0) return [];
 
-  // Sort list: active non-DNF racers first (by lbpos or numeric pos), then DNF racers at the end
-  const sorted = [...riders].sort((a, b) => {
-    const isDnfA = isRiderDnf(a);
-    const isDnfB = isRiderDnf(b);
-    if (isDnfA && !isDnfB) return 1;
-    if (!isDnfA && isDnfB) return -1;
-
-    const posA = a.lbpos ?? (parseInt(a.pos, 10) || 999);
-    const posB = b.lbpos ?? (parseInt(b.pos, 10) || 999);
-    return posA - posB;
-  });
+  // Keep the exact sorted racer position as provided by raw data (do NOT shift DNF/terminal racers behind)
+  const sorted = [...riders];
 
   const leaderTimeStr = sorted[0]?.tTm;
   const leaderMs = parseLapTimeToMs(leaderTimeStr);
 
-  let activeIndex = 0;
   return sorted.map((rider, index) => {
-    const isDnf = isRiderDnf(rider);
-    let posStr: string;
-    let posInt: number;
+    const status = rider.status || 'RUN';
+    const isTerminalState = TERMINAL_STATUS_STATES.includes(status);
+    const isDnf = isTerminalState || isRiderDnf(rider);
 
-    if (isDnf) {
-      posStr = "DNF";
-      posInt = rider.lbpos && rider.lbpos > 900 ? rider.lbpos : 990 + index;
+    // Keep the raw position from raw data; only states 6-11 (terminal states) replace the .pos string
+    let posStr: string;
+    let posInt: number = rider.lbpos ?? (index + 1);
+
+    if (isTerminalState) {
+      posStr = status;
+    } else if (isDnf) {
+      posStr = typeof rider.pos === 'string' && rider.pos ? rider.pos : 'DNF';
     } else {
-      activeIndex++;
-      posInt = activeIndex;
-      posStr = posInt.toString();
+      // States 1-5 (RUN, PIT, IN, OUT, FIN) do NOT replace .pos string
+      posStr = typeof rider.pos === 'string' && rider.pos ? rider.pos : (rider.lbpos ? String(rider.lbpos) : String(index + 1));
     }
 
     // Preserve existing raw string gaps if available and valid (e.g., "1 Lap", "0.238", etc.)
@@ -412,10 +411,10 @@ export function recalculateGaps(riders: RiderResult[]): RiderResult[] {
     let dfStr = rider.df;
 
     if (isDnf) {
-      gpStr = "-";
-      dfStr = "-";
+      gpStr = gpStr && gpStr !== '-' ? gpStr : "-";
+      dfStr = dfStr && dfStr !== '-' ? dfStr : "-";
     } else if (index === 0) {
-      gpStr = "LEADER";
+      gpStr = gpStr && gpStr !== '-' ? gpStr : "LEADER";
       dfStr = "-";
     } else {
       const currentMs = parseLapTimeToMs(rider.tTm);
@@ -436,9 +435,10 @@ export function recalculateGaps(riders: RiderResult[]): RiderResult[] {
 
     return {
       ...rider,
+      status,
       lbpos: posInt,
       pos: posStr,
-      pCl: isDnf ? "DNF" : (rider.pCl && isNaN(Number(rider.pCl)) && rider.pCl !== 'DNF' ? rider.pCl : posStr),
+      pCl: isDnf ? posStr : (rider.pCl && isNaN(Number(rider.pCl)) ? rider.pCl : posStr),
       gp: gpStr || "-",
       df: dfStr || "-",
       gpCl: gpStr || "-",

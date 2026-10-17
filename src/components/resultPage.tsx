@@ -32,34 +32,32 @@ export const RaceResultPage: React.FC<RaceResultPageProps> = ({
   const displayGroupName = resolvedData?.groupName || groupName;
   const displaySessionName = sessionName;
 
-  // Build unified list of finished racers
-  let finishedRacers: Array<{
+  interface FinishedRacerItem {
     id: string;
     pos: number;
     name: string;
     team: string;
     number: string | number;
+    status?: string;
     totalTime: string;
     isFinished: boolean;
-  }> = [];
+    btTm?: string;
+  }
+
+  // Build unified list of finished racers
+  let finishedRacers: FinishedRacerItem[] = [];
 
   if (riders && riders.length > 0) {
-    // Sort riders by position
-    const sorted = [...riders].sort(
-      (a, b) => (a.lbpos || parseInt(a.pos, 10) || 99) - (b.lbpos || parseInt(b.pos, 10) || 99)
-    );
+    // Maintain raw data sorted position exactly as received
+    const sorted = [...riders];
 
-    // Filter finished racers (`r.if === true` or completed laps or if explicitly finished)
-    // Fall back to showing all sorted if none explicitly flagged `if === true`
-    const hasFlaggedFinished = sorted.some((r) => r.if === true);
-    const filtered =  sorted;
-
-    finishedRacers = filtered.map((r, idx) => ({
+    finishedRacers = sorted.map((r, idx) => ({
       id: r.id || `rider-${idx}`,
       pos: idx + 1,
       name: r.nam || '-',
       team: r.cb || '-',
       number: r.no || '-',
+      status: r.status,
       totalTime: r.tTm || r.lsTm || '--:--.---',
       isFinished: true,
       btTm: r.btTm || '--:--.---',
@@ -75,22 +73,14 @@ export const RaceResultPage: React.FC<RaceResultPageProps> = ({
         name: r.riderName || '-',
         team: r.teamGroup || '-',
         number: r.riderNo || '-',
+        status: r.status,
         totalTime: r.totalTime || '--:--.---',
         isFinished: true,
       })
     );
   }
-  
 
-  let dividedFinishedRacers: Array<{
-    id: string;
-    pos: number;
-    name: string;
-    team: string;
-    number: string | number;
-    totalTime: string;
-    isFinished: boolean;
-  }> = [];
+  let dividedFinishedRacers: FinishedRacerItem[] = [];
 
   // 2. Chunk into groups of 10
   const PAGE_SIZE = 10;
@@ -174,6 +164,23 @@ export const RaceResultPage: React.FC<RaceResultPageProps> = ({
                             {/* YAMAHA RACING TEAM */}
                           </span>
                         </div>
+                      </td>
+
+                      {/* State 5-10/11 badge placed between racer name and their number */}
+                      <td className="py-1 px-3 text-center whitespace-nowrap">
+                        {racer.status && ['FIN', 'DNF', 'DNS', 'DSQ', 'DNQ', 'Ret', 'NC'].includes(racer.status) && (
+                          <span
+                            className={`inline-block font-mono font-black text-xs sm:text-sm px-2.5 py-0.5 rounded uppercase tracking-wider ${
+                              racer.status === 'FIN'
+                                ? 'bg-emerald-600 text-white'
+                                : racer.status === 'DNF'
+                                ? 'bg-rose-600 text-white'
+                                : 'bg-zinc-800 text-yellow-300'
+                            }`}
+                          >
+                            {racer.status}
+                          </span>
+                        )}
                       </td>
 
                       {/* Column 3: Racer Number */}

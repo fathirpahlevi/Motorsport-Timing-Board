@@ -9,6 +9,40 @@ export interface SignalRPacket {
   results?: any[];
 }
 
+export type RacerStatus =
+  | 'RUN'
+  | 'PIT'
+  | 'IN'
+  | 'OUT'
+  | 'FIN'
+  | 'DNF'
+  | 'DNS'
+  | 'DSQ'
+  | 'DNQ'
+  | 'Ret'
+  | 'NC';
+
+export const RACER_STATUS_OPTIONS: RacerStatus[] = [
+  'RUN',
+  'PIT',
+  'IN',
+  'OUT',
+  'FIN',
+  'DNF',
+  'DNS',
+  'DSQ',
+  'DNQ',
+  'Ret',
+  'NC',
+];
+
+export interface RiderManualOverride {
+  nam?: string;
+  cb?: string;
+  no?: string;
+  status?: RacerStatus;
+}
+
 export interface RiderResult {
   sesId: string;
   eId: string;
@@ -38,6 +72,7 @@ export interface RiderResult {
   if?: boolean;    // Finished flag
   s0?: string;     // Sector 0
   cb?: string;     // Club/Team name (e.g. "兴联车队 XINGLIAN")
+  status?: RacerStatus; // 11 Racer States (RUN, PIT, IN, OUT, FIN, DNF, DNS, DSQ, DNQ, Ret, NC)
   
   // Custom states added for UI reactivity (or injected by simulator)
   prevPos?: number;    // Previous position for animation trigger

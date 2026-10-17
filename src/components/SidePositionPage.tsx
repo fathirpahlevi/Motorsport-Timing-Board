@@ -425,45 +425,80 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                       }}
                     >
                       <div className={`flex items-center grid-cols-7 w-[240px] h-full grid border-transparent relative z-20 shadow-xs`}>
-                        {/* FINSIHED FLAG */}
-                        <div className="top-0 h-[30px]"> 
-                        {(!rider.changeDirection || rider.changeDirection === 'steady') && (
-                          
-                          <img
-                            src={finishFlagUrl} // Path from public/ directory
-                            alt="Finish flag"
-                            className={`${rider.if && !isDnf ? '' : 'hidden '}h-[40px] drop-shadow-2xl col-span-1 z-20 pointer-events-none`}
-                          />
-                          )}
-                          </div>
-                        {/* POSITION & ARROW */}
+                        {/* FINISHED FLAG / STATUS 2-5 TEXT BADGE */}
+                        <div className="top-0 h-[30px] flex items-center justify-center"> 
+                          {(() => {
+                            const status = rider.status;
+                            const isState2to5 = status && ['PIT', 'IN', 'OUT', 'FIN'].includes(status);
+                            if (isState2to5) {
+                              return (
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-tight shadow-sm font-mono ${
+                                  status === 'FIN'
+                                    ? 'bg-emerald-600 text-white'
+                                    : status === 'PIT'
+                                    ? 'bg-amber-500 text-black'
+                                    : status === 'IN'
+                                    ? 'bg-orange-600 text-white'
+                                    : 'bg-yellow-400 text-black'
+                                }`}>
+                                  {status}
+                                </span>
+                              );
+                            }
+                            // Standard RUN state: show checkered flag if finished (rider.if)
+                            if (rider.if && !isDnf && (!rider.changeDirection || rider.changeDirection === 'steady')) {
+                              return (
+                                <img
+                                  src={finishFlagUrl}
+                                  alt="Finish flag"
+                                  className="h-[40px] drop-shadow-2xl col-span-1 z-20 pointer-events-none"
+                                />
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
+
+                        {/* POSITION & ARROW / STATUS 5-11 */}
                         <div className={`col-span-1 border-transparent flex items-center justify-center h-full bg-zinc-100 ${flashClass}`}>
-                          {isDnf ? (
-                            <span
-                              className="text-rose-600 text-xs font-black tracking-tight uppercase"
-                              id={`rider-pos-${rider.id}`}
-                            >
-                              DNF
-                            </span>
-                          ) : (
-                            <div>
-                              {rider.changeDirection === 'up' && (
-                                <ChevronUp className="w-7 h-7 text-emerald-600" />
-                              )}
-                              {rider.changeDirection === 'down' && (
-                                <ChevronDown className="w-7 h-7 text-red-500" />
-                              )}
-                              {(!rider.changeDirection ||
-                                (rider.changeDirection !== 'up' && rider.changeDirection !== 'down')) && (
+                          {(() => {
+                            const status = rider.status;
+                            const isState5to11 = status && ['FIN', 'DNF', 'DNS', 'DSQ', 'DNQ', 'Ret', 'NC'].includes(status);
+                            const rawPos = typeof rider.pos === 'string' ? rider.pos.trim() : (rider.lbpos ? String(rider.lbpos) : String(index + 1));
+                            const isDnfOrTerminal = isDnf || isState5to11 || rawPos === 'DNF' || isNaN(Number(rawPos));
+
+                            if (isDnfOrTerminal) {
+                              const displayText = isState5to11 ? status : (rawPos || 'DNF');
+                              return (
                                 <span
-                                  className="text-black text-xl font-bold"
+                                  className="text-rose-600 text-xs font-black tracking-tight uppercase"
                                   id={`rider-pos-${rider.id}`}
                                 >
-                                  {rider.pos || (rider.lbpos ? String(rider.lbpos) : String(index + 1))}
+                                  {displayText}
                                 </span>
-                              )}
-                            </div>
-                          )}
+                              );
+                            }
+
+                            return (
+                              <div>
+                                {rider.changeDirection === 'up' && (
+                                  <ChevronUp className="w-7 h-7 text-emerald-600" />
+                                )}
+                                {rider.changeDirection === 'down' && (
+                                  <ChevronDown className="w-7 h-7 text-red-500" />
+                                )}
+                                {(!rider.changeDirection ||
+                                  (rider.changeDirection !== 'up' && rider.changeDirection !== 'down')) && (
+                                  <span
+                                    className="text-black text-xl font-bold"
+                                    id={`rider-pos-${rider.id}`}
+                                  >
+                                    {rawPos}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         {/* RIDER NAME / TEAM */}

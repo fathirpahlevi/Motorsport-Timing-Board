@@ -39,7 +39,7 @@ import {
   ChevronUp,
   ChevronDown
 } from 'lucide-react';
-import { RiderResult, SignalRPacket, ControlState, RaceEventData, RacerResult, LowerThirdState } from './types';
+import { RiderResult, SignalRPacket, ControlState, RaceEventData, RacerResult, LowerThirdState, RiderManualOverride, RacerStatus } from './types';
 import { INITIAL_RIDERS, recalculateGaps, parseLapTimeToMs, formatLapTime } from './data';
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { RaceResultPage } from './components/resultPage';
@@ -264,9 +264,43 @@ export default function App() {
   // Active Riders / Telemetry grid
   const [isManualMode, setIsManualMode] = useState<boolean>(false);
   const isManualModeRef = useRef<boolean>(false);
+  const manualOverridesRef = useRef<{ [riderId: string]: RiderManualOverride }>({});
+
+  const setManualModeSync = (manual: boolean) => {
+    isManualModeRef.current = manual;
+    setIsManualMode(manual);
+  };
+
   useEffect(() => {
     isManualModeRef.current = isManualMode;
   }, [isManualMode]);
+
+  const applyManualOverridesToRider = (rider: RiderResult): RiderResult => {
+    const overrides = manualOverridesRef.current;
+    if (!overrides) return rider;
+    const ov = overrides[rider.id] || (rider.no ? overrides[`no_${rider.no}`] : undefined);
+    if (!ov) return rider;
+    const updated = { ...rider };
+    if (ov.nam !== undefined && ov.nam.trim()) {
+      updated.nam = ov.nam.trim();
+      updated.fNam = ov.nam.trim();
+    }
+    if (ov.cb !== undefined) {
+      updated.cb = ov.cb.trim() || '-';
+    }
+    if (ov.no !== undefined && ov.no.trim()) {
+      updated.no = ov.no.trim();
+      updated.dNo = ov.no.trim();
+    }
+    if (ov.status !== undefined) {
+      updated.status = ov.status;
+    }
+    return updated;
+  };
+
+  const applyManualOverridesToList = (list: RiderResult[]): RiderResult[] => {
+    return list.map(applyManualOverridesToRider);
+  };
 
   const [riders, setRiders] = useState<RiderResult[]>(() => {
     return recalculateGaps(INITIAL_RIDERS);
@@ -579,7 +613,7 @@ export default function App() {
         return prevRiders;
       }
 
-      return cleanedPack;
+      return applyManualOverridesToList(cleanedPack);
     });
   };
   // Fetch initial Speedhive timing state via Express API proxy to bypass CORS
@@ -906,7 +940,7 @@ export default function App() {
                 liveSpeedhiveRidersRef.current = sorted;
                 hasLiveSpeedhiveDataRef.current = true;
                 if (!isManualModeRef.current) {
-                  setRiders(sorted);
+                  setRiders(applyManualOverridesToList(sorted));
                 }
               } else if (Array.isArray(data.results)) {
                 injectSignalRPacket(data);
@@ -1070,12 +1104,24 @@ export default function App() {
                 const nextManual = message.raceState.isManualMode;
                 setIsManualMode(nextManual);
                 isManualModeRef.current = nextManual;
+                if (message.raceState.manualOverrides) {
+                  manualOverridesRef.current = {
+                    ...manualOverridesRef.current,
+                    ...message.raceState.manualOverrides,
+                  };
+                }
                 if (Array.isArray(message.raceState.manualRiders) && message.raceState.manualRiders.length > 0) {
                   manualRidersRef.current = message.raceState.manualRiders;
                   if (nextManual) {
                     setRiders(message.raceState.manualRiders);
                   }
                 }
+              }
+              if (message.raceState.manualOverrides) {
+                manualOverridesRef.current = {
+                  ...manualOverridesRef.current,
+                  ...message.raceState.manualOverrides,
+                };
               }
               if (message.raceState.lowerThird) {
                 setLowerThirdState({
@@ -1098,6 +1144,12 @@ export default function App() {
             const nextManual = !!message.isManualMode;
             setIsManualMode(nextManual);
             isManualModeRef.current = nextManual;
+            if (message.manualOverrides) {
+              manualOverridesRef.current = {
+                ...manualOverridesRef.current,
+                ...message.manualOverrides,
+              };
+            }
             if (message.riders && Array.isArray(message.riders)) {
               manualRidersRef.current = message.riders;
             }
@@ -1106,11 +1158,11 @@ export default function App() {
                 setRiders(message.riders);
               }
             } else {
-              // Live Mode: revert to live Speedhive telemetry or default initial racers
+              // Live Mode: revert whole data to live Speedhive telemetry or default initial racers, but keep manual edits (Name, Team, Number, Status)
               if (hasLiveSpeedhiveDataRef.current && liveSpeedhiveRidersRef.current.length > 0) {
-                setRiders(liveSpeedhiveRidersRef.current);
+                setRiders(applyManualOverridesToList(liveSpeedhiveRidersRef.current));
               } else {
-                setRiders(defaultInitialRiders);
+                setRiders(applyManualOverridesToList(defaultInitialRiders));
               }
             }
 
@@ -1124,6 +1176,21 @@ export default function App() {
               if (typeof meta.lapsToGo === 'number') setLapsToGo(meta.lapsToGo);
               if (typeof meta.flag === 'number') setFlag(meta.flag);
             }
+          }
+          else if (message.type === "manualRiderOverride") {
+            addWebSocketLog('system', `✏️ Received rider manual override for ${message.riderId}`);
+            if (message.manualOverrides) {
+              manualOverridesRef.current = {
+                ...manualOverridesRef.current,
+                ...message.manualOverrides,
+              };
+            } else if (message.riderId && message.override) {
+              manualOverridesRef.current[message.riderId] = {
+                ...(manualOverridesRef.current[message.riderId] || {}),
+                ...message.override,
+              };
+            }
+            setRiders((prev) => prev.map(applyManualOverridesToRider));
           }
           else if (message.type === "lowerThirdControl") {
             setLowerThirdState({
@@ -1423,7 +1490,7 @@ export default function App() {
               riders={riders}
               setRiders={setRiders}
               isManualMode={isManualMode}
-              setIsManualMode={setIsManualMode}
+              setIsManualMode={setManualModeSync}
               raceTitle={raceTitle}
               setRaceTitle={setRaceTitle}
               sessionName={sessionName}

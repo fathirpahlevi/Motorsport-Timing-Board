@@ -37,6 +37,7 @@ let raceState = {
   isManualMode: false,
   manualRiders: [] as any[],
   manualSessionInfo: null as any,
+  manualOverrides: {} as Record<string, any>,
   lowerThird: {
     visible: false,
     position: 'left' as 'left' | 'center' | 'right',
@@ -79,6 +80,7 @@ function saveRaceStateCache() {
       isManualMode: raceState.isManualMode,
       manualRiders: raceState.manualRiders,
       manualSessionInfo: raceState.manualSessionInfo,
+      manualOverrides: raceState.manualOverrides,
       lowerThird: raceState.lowerThird,
       sessionInfo: raceState.sessionInfo,
       controlAction: raceState.controlAction,
@@ -98,6 +100,7 @@ function loadRaceStateCache() {
       if (typeof data.isManualMode === 'boolean') raceState.isManualMode = data.isManualMode;
       if (Array.isArray(data.manualRiders) && data.manualRiders.length > 0) raceState.manualRiders = data.manualRiders;
       if (data.manualSessionInfo) raceState.manualSessionInfo = data.manualSessionInfo;
+      if (data.manualOverrides) raceState.manualOverrides = data.manualOverrides;
       if (data.lowerThird) raceState.lowerThird = data.lowerThird;
       if (data.sessionInfo) raceState.sessionInfo = data.sessionInfo;
       if (data.controlAction) raceState.controlAction = data.controlAction;
@@ -533,15 +536,17 @@ ${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
       stats: raceState.stats,
       controlAction: raceState.controlAction,
       isTimerRunning: raceState.isTimerRunning,
-      raceSeconds: raceState.raceSeconds
+      raceSeconds: raceState.raceSeconds,
+      manualOverrides: raceState.manualOverrides,
     });
 
-    if (raceState.isManualMode || raceState.manualRiders.length > 0) {
+    if (raceState.isManualMode || raceState.manualRiders.length > 0 || (raceState.manualOverrides && Object.keys(raceState.manualOverrides).length > 0)) {
       sendToClient(ws, {
         type: "manualDataSync",
         isManualMode: raceState.isManualMode,
         riders: raceState.manualRiders,
-        sessionInfo: raceState.manualSessionInfo
+        sessionInfo: raceState.manualSessionInfo,
+        manualOverrides: raceState.manualOverrides,
       });
     }
 
@@ -748,13 +753,45 @@ ${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
           raceState.isManualMode = !!message.isManualMode;
           if (message.riders) raceState.manualRiders = message.riders;
           if (message.sessionInfo) raceState.manualSessionInfo = message.sessionInfo;
+          if (message.manualOverrides) {
+            raceState.manualOverrides = {
+              ...(raceState.manualOverrides || {}),
+              ...message.manualOverrides
+            };
+          }
           saveRaceStateCache();
           console.log(`[WS Server] Manual Mode Sync: enabled=${raceState.isManualMode}, riders=${raceState.manualRiders.length}`);
           broadcastToAll({
             type: "manualDataSync",
             isManualMode: raceState.isManualMode,
             riders: raceState.manualRiders,
-            sessionInfo: raceState.manualSessionInfo
+            sessionInfo: raceState.manualSessionInfo,
+            manualOverrides: raceState.manualOverrides
+          });
+        }
+        else if (message.type === 'manualRiderOverride') {
+          if (!raceState.manualOverrides) raceState.manualOverrides = {};
+          if (message.riderId && message.override) {
+            raceState.manualOverrides[message.riderId] = {
+              ...(raceState.manualOverrides[message.riderId] || {}),
+              ...message.override
+            };
+            if (Array.isArray(raceState.manualRiders)) {
+              raceState.manualRiders = raceState.manualRiders.map((r: any) => {
+                if (r.id === message.riderId) {
+                  return { ...r, ...message.override };
+                }
+                return r;
+              });
+            }
+          }
+          saveRaceStateCache();
+          console.log(`[WS Server] Saved manual rider override: riderId=${message.riderId}`, message.override);
+          broadcastToAll({
+            type: "manualRiderOverride",
+            riderId: message.riderId,
+            override: message.override,
+            manualOverrides: raceState.manualOverrides
           });
         }
         else if (message.type === 'videoStatus'){

@@ -17,7 +17,8 @@ import {
   ArrowRight,
   Tv,
   Radio,
-  ClipboardPaste
+  ClipboardPaste,
+  FolderOpen
 } from 'lucide-react';
 import { RiderResult } from '../types';
 import { recalculateGaps } from '../data';
@@ -92,6 +93,22 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
   const [csvFileName, setCsvFileName] = useState<string>('');
   const [csvError, setCsvError] = useState<string | null>(null);
 
+  // Cached Import States
+  const [hasCachedCsv, setHasCachedCsv] = useState<boolean>(() => {
+    try {
+      return !!localStorage.getItem('speedhive_cached_csv_import');
+    } catch {
+      return false;
+    }
+  });
+  const [hasCachedImage, setHasCachedImage] = useState<boolean>(() => {
+    try {
+      return !!localStorage.getItem('speedhive_cached_image_import');
+    } catch {
+      return false;
+    }
+  });
+
   // Image Upload State
   const [uploadedImages, setUploadedImages] = useState<UploadedImageFile[]>([]);
   const [promptHint, setPromptHint] = useState<string>('');
@@ -110,6 +127,44 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
 
   const csvFileInputRef = useRef<HTMLInputElement>(null);
   const imageFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleLoadCachedCsv = () => {
+    try {
+      const raw = localStorage.getItem('speedhive_cached_csv_import');
+      if (raw) {
+        const parsed: ParsedGridResult = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.racers) && parsed.racers.length > 0) {
+          setPreviewResult(parsed);
+          setPastedToast(`📂 Loaded previous CSV grid data (${parsed.racers.length} racers)`);
+          setTimeout(() => setPastedToast(null), 3000);
+          return;
+        }
+      }
+      setPastedToast('⚠️ No previous CSV data found in cache');
+      setTimeout(() => setPastedToast(null), 3000);
+    } catch (e: any) {
+      setCsvError('Failed to load cached CSV data');
+    }
+  };
+
+  const handleLoadCachedImage = () => {
+    try {
+      const raw = localStorage.getItem('speedhive_cached_image_import');
+      if (raw) {
+        const parsed: ParsedGridResult = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.racers) && parsed.racers.length > 0) {
+          setPreviewResult(parsed);
+          setPastedToast(`📂 Loaded previous image extraction (${parsed.racers.length} racers)`);
+          setTimeout(() => setPastedToast(null), 3000);
+          return;
+        }
+      }
+      setPastedToast('⚠️ No previous image extraction found in cache');
+      setTimeout(() => setPastedToast(null), 3000);
+    } catch (e: any) {
+      setGeminiError('Failed to load cached image extraction');
+    }
+  };
 
   // ----------------------------------------------------
   // CSV PARSER
@@ -265,9 +320,16 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
         return;
       }
 
-      setPreviewResult({
+      const parsedData: ParsedGridResult = {
         racers: reindexed,
-      });
+      };
+      setPreviewResult(parsedData);
+      try {
+        localStorage.setItem('speedhive_cached_csv_import', JSON.stringify(parsedData));
+        setHasCachedCsv(true);
+      } catch {
+        // ignore
+      }
       setCsvError(null);
     } catch (err: any) {
       setCsvError(`Failed to parse CSV: ${err.message || 'Unknown error'}`);
@@ -519,12 +581,20 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
         pos: i + 1,
       }));
 
-      setPreviewResult({
+      const resultData: ParsedGridResult = {
         raceTitle: data.raceTitle,
         groupName: data.groupName,
         sessionName: data.sessionName,
         racers: finalRacers,
-      });
+      };
+
+      setPreviewResult(resultData);
+      try {
+        localStorage.setItem('speedhive_cached_image_import', JSON.stringify(resultData));
+        setHasCachedImage(true);
+      } catch {
+        // ignore
+      }
     } catch (err: any) {
       console.error('Gemini starting grid extraction error:', err);
       setGeminiError(err.message || 'Failed to extract starting grid data.');
@@ -562,6 +632,7 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
         tTm: r.tTm || undefined,
         lsTm: r.btTm || undefined,
         if: false,
+        status: 'RUN',
         ls: 0,
         gp: targetPos === 1 ? 'POLE' : r.tTm ? `+${r.tTm}` : '-',
         df: targetPos === 1 ? '-' : '-',
@@ -579,13 +650,8 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
         }
       : undefined;
 
-    // Call parent handler
+    // Call parent handler (which activates manual mode and broadcasts the updated racers)
     onApplyRiders(formattedRiders, applyMode, metadata);
-
-    // If manual mode is off, automatically enable it so displays show the starting grid
-    if (!isManualMode) {
-      onToggleManualMode(true);
-    }
 
     // Clear preview
     setPreviewResult(null);
@@ -717,6 +783,15 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleLoadCachedCsv}
+                disabled={!hasCachedCsv}
+                className="px-3 py-1.5 bg-blue-700 hover:bg-blue-600 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed text-white text-xs font-bold uppercase rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm"
+                title="Load previously parsed CSV data"
+              >
+                <FolderOpen className="w-3.5 h-3.5 text-white" /> Load Previous Data
+              </button>
               <button
                 type="button"
                 onClick={handleLoadSampleCsv}
@@ -977,8 +1052,17 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
             </div>
           )}
 
-          {/* Gemini Trigger Button */}
+          {/* Gemini Trigger Button & Load Previous Data */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+            <button
+              type="button"
+              onClick={handleLoadCachedImage}
+              disabled={!hasCachedImage}
+              className="w-full sm:w-auto px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-200 border border-zinc-700"
+              title="Load previously extracted data from cache"
+            >
+              <FolderOpen className="w-4 h-4 text-emerald-400" /> Load Previous Data
+            </button>
 
             <button
               type="button"

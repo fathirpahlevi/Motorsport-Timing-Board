@@ -21,7 +21,7 @@
     LayoutGrid,
     FileText
     } from 'lucide-react';
-    import { RiderResult } from '../types';
+    import { RiderResult, RacerStatus, RACER_STATUS_OPTIONS, RiderManualOverride } from '../types';
     import { recalculateGaps } from '../data';
     import { StartingGridImporter } from './StartingGridImporter';
 
@@ -78,11 +78,27 @@
     const [newRacerTotalTime, setNewRacerTotalTime] = useState('');
     const [newRacerBestTime, setNewRacerBestTime] = useState('');
     const [newRacerLastTime, setNewRacerLastTime] = useState('');
-    const [newRacerIsFinished, setNewRacerIsFinished] = useState(false);
+    const [newRacerStatus, setNewRacerStatus] = useState<RacerStatus>('RUN');
 
     // State for inline editing a racer
     const [editingRiderId, setEditingRiderId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState<Partial<RiderResult>>({});
+
+    // Helper to broadcast individual rider manual override (name, team, number, status)
+    const broadcastManualRiderOverride = (riderId: string, override: Partial<RiderManualOverride>) => {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(
+                JSON.stringify({
+                    type: 'manualRiderOverride',
+                    riderId,
+                    override,
+                })
+            );
+        }
+        if (addWebSocketLog) {
+            addWebSocketLog('sent', `📤 Rider manual override sent for ${riderId}`);
+        }
+    };
 
     // Helper to send manual data sync over WebSocket
     const broadcastManualData = (
@@ -209,6 +225,7 @@
 
         // Calculate position: default to next position if not specified
         const targetPos = newRacerPos ? parseInt(newRacerPos, 10) : riders.length + 1;
+        const isTerminal = ['DNF', 'DNS', 'DSQ', 'DNQ', 'Ret', 'NC'].includes(newRacerStatus);
 
         const newRider: RiderResult = {
         sesId: 'manual-session',
@@ -222,27 +239,21 @@
         cl: 'MANUAL CLASS',
         cln: 'Manual Entry',
         lbpos: targetPos,
-        pos: targetPos.toString(),
-        pCl: targetPos.toString(),
+        pos: isTerminal ? newRacerStatus : targetPos.toString(),
+        pCl: isTerminal ? newRacerStatus : targetPos.toString(),
+        status: newRacerStatus,
         tTm: newRacerTotalTime.trim() || undefined,
         btTm: newRacerBestTime.trim() || undefined,
         lsTm: newRacerLastTime.trim() || undefined,
-        if: newRacerIsFinished,
+        if: newRacerStatus === 'FIN',
         ls: laps || 1,
         gp: targetPos === 1 ? 'LEADER' : newRacerTotalTime ? `+${newRacerTotalTime}` : '-',
         df: targetPos === 1 ? '-' : '-',
         };
 
-        // Insert racer into list and sort by lbpos
-        const updated = [...riders, newRider].sort((a, b) => a.lbpos - b.lbpos);
-        const reindexed = updated.map((r, idx) => ({
-        ...r,
-        lbpos: idx + 1,
-        pos: (idx + 1).toString(),
-        pCl: (idx + 1).toString(),
-        }));
-
-        const finalRiders = recalculateGaps(reindexed);
+        // Insert racer into list and keep order
+        const updated = [...riders, newRider];
+        const finalRiders = recalculateGaps(updated);
         setRiders(finalRiders);
 
         // Reset form
@@ -253,11 +264,11 @@
         setNewRacerTotalTime('');
         setNewRacerBestTime('');
         setNewRacerLastTime('');
-        setNewRacerIsFinished(false);
+        setNewRacerStatus('RUN');
 
         // Broadcast if manual mode is enabled
         if (isManualMode) {
-        broadcastManualData(true, finalRiders);
+            broadcastManualData(true, finalRiders);
         }
     };
 
@@ -278,8 +289,8 @@
         const updated = reordered.map((r, idx) => ({
         ...r,
         lbpos: idx + 1,
-        pos: (idx + 1).toString(),
-        pCl: (idx + 1).toString(),
+        pos: ['DNF', 'DNS', 'DSQ', 'DNQ', 'Ret', 'NC'].includes(r.status || '') ? (r.status as string) : (idx + 1).toString(),
+        pCl: ['DNF', 'DNS', 'DSQ', 'DNQ', 'Ret', 'NC'].includes(r.status || '') ? (r.status as string) : (idx + 1).toString(),
         changeDirection: (idx === index ? (direction === 'up' ? 'down' : 'up') : idx === targetIndex ? (direction === 'up' ? 'up' : 'down') : 'steady') as 'up' | 'down' | 'steady',
         changeTime: Date.now(),
         }));
@@ -292,18 +303,27 @@
         }
     };
 
-    // Toggle finished flag on racer
-    const handleToggleFinished = (id: string) => {
+    // Update racer status directly (11 states)
+    const handleUpdateRacerStatus = (id: string, newStatus: RacerStatus) => {
         const updated = riders.map((r) => {
-        if (r.id === id) {
-            return { ...r, if: !r.if };
-        }
-        return r;
+            if (r.id === id) {
+                const isTerminal = ['DNF', 'DNS', 'DSQ', 'DNQ', 'Ret', 'NC'].includes(newStatus);
+                return {
+                    ...r,
+                    status: newStatus,
+                    if: newStatus === 'FIN',
+                    pos: isTerminal ? newStatus : (isNaN(Number(r.pos)) ? (r.lbpos ? String(r.lbpos) : '1') : r.pos),
+                };
+            }
+            return r;
         });
-        setRiders(updated);
+        const finalRiders = recalculateGaps(updated);
+        setRiders(finalRiders);
 
+        // Always broadcast override so it applies and retains even in LIVE mode
+        broadcastManualRiderOverride(id, { status: newStatus });
         if (isManualMode) {
-        broadcastManualData(true, updated);
+            broadcastManualData(true, finalRiders);
         }
     };
 
@@ -319,53 +339,41 @@
         if (!editingRiderId) return;
 
         const updated = riders.map((r) => {
-        if (r.id === editingRiderId) {
-            const merged = { ...r, ...editForm };
-            const isDnf = typeof editForm.pos === 'string' && editForm.pos.trim().toUpperCase() === 'DNF';
-            const posInt = isDnf ? 999 : (editForm.pos ? parseInt(editForm.pos, 10) || r.lbpos : r.lbpos);
-            return {
-            ...merged,
-            lbpos: posInt,
-            pos: isDnf ? 'DNF' : posInt.toString(),
-            pCl: isDnf ? 'DNF' : (merged.pCl === 'DNF' ? 'DNF' : posInt.toString()),
-            };
-        }
-        return r;
-        }).sort((a, b) => {
-            const isDnfA = a.pos === 'DNF' || a.pCl === 'DNF';
-            const isDnfB = b.pos === 'DNF' || b.pCl === 'DNF';
-            if (isDnfA && !isDnfB) return 1;
-            if (!isDnfA && isDnfB) return -1;
-            return a.lbpos - b.lbpos;
+            if (r.id === editingRiderId) {
+                const merged = { ...r, ...editForm };
+                const statusVal: RacerStatus = (editForm.status as RacerStatus) || r.status || 'RUN';
+                const isTerminal = ['DNF', 'DNS', 'DSQ', 'DNQ', 'Ret', 'NC'].includes(statusVal);
+                const posVal = isTerminal ? statusVal : (editForm.pos ?? r.pos);
+                return {
+                    ...merged,
+                    status: statusVal,
+                    if: statusVal === 'FIN',
+                    pos: posVal,
+                };
+            }
+            return r;
         });
 
-        let activeIdx = 0;
-        const reindexed = updated.map((r) => {
-          const isDnf = r.pos === 'DNF' || r.pCl === 'DNF';
-          if (isDnf) {
-            return {
-              ...r,
-              lbpos: 999,
-              pos: 'DNF',
-              pCl: 'DNF',
-            };
-          }
-          activeIdx++;
-          return {
-            ...r,
-            lbpos: activeIdx,
-            pos: activeIdx.toString(),
-            pCl: (r.pCl && isNaN(Number(r.pCl)) && r.pCl !== 'DNF' ? r.pCl : activeIdx.toString()),
-          };
-        });
-
-        const finalRiders = recalculateGaps(reindexed);
+        // Keep raw position order from raw data (do NOT shift DNF behind)
+        const finalRiders = recalculateGaps(updated);
         setRiders(finalRiders);
+
+        // Retain changes to Racer Name, Team Name, Vehicle Number, and Status even when in LIVE mode!
+        const targetRider = finalRiders.find((r) => r.id === editingRiderId);
+        if (targetRider) {
+            broadcastManualRiderOverride(editingRiderId, {
+                nam: targetRider.nam,
+                cb: targetRider.cb,
+                no: targetRider.no,
+                status: targetRider.status,
+            });
+        }
+
         setEditingRiderId(null);
         setEditForm({});
 
         if (isManualMode) {
-        broadcastManualData(true, finalRiders);
+            broadcastManualData(true, finalRiders);
         }
     };
 
@@ -728,16 +736,21 @@
                 />
                 </div>
 
-                <div className="flex items-end pb-1">
-                <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-zinc-300">
-                    <input
-                    type="checkbox"
-                    checked={newRacerIsFinished}
-                    onChange={(e) => setNewRacerIsFinished(e.target.checked)}
-                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 bg-zinc-950 border-zinc-800 cursor-pointer"
-                    />
-                    Is Finished 🏁
+                <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1">
+                    Status
                 </label>
+                <select
+                    value={newRacerStatus}
+                    onChange={(e) => setNewRacerStatus(e.target.value as RacerStatus)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-2 text-xs text-white font-mono focus:outline-none focus:border-emerald-500 uppercase font-bold"
+                >
+                    {RACER_STATUS_OPTIONS.map((st) => (
+                    <option key={st} value={st} className="bg-zinc-900 text-white">
+                        {st}
+                    </option>
+                    ))}
+                </select>
                 </div>
             </div>
 
@@ -798,7 +811,7 @@
                         <th className="py-2.5 px-3">Racer & Team</th>
                         <th className="py-2.5 px-3 text-right">Total Time</th>
                         <th className="py-2.5 px-3 text-right">Best Lap</th>
-                        <th className="py-2.5 px-3 text-center w-24">Finished</th>
+                        <th className="py-2.5 px-3 text-center w-28">Status</th>
                         <th className="py-2.5 px-3 text-center w-36">Order</th>
                         <th className="py-2.5 px-3 text-right w-28">Actions</th>
                     </tr>
@@ -864,12 +877,17 @@
                                 />
                             </td>
                             <td className="py-3 px-3 text-center">
-                                <input
-                                type="checkbox"
-                                checked={editForm.if ?? racer.if ?? false}
-                                onChange={(e) => setEditForm({ ...editForm, if: e.target.checked })}
-                                className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 bg-zinc-950 border-zinc-700 cursor-pointer"
-                                />
+                                <select
+                                value={editForm.status || racer.status || 'RUN'}
+                                onChange={(e) => setEditForm({ ...editForm, status: e.target.value as RacerStatus })}
+                                className="bg-zinc-950 border border-zinc-700 rounded px-2 py-1 text-xs font-bold text-white uppercase focus:outline-none focus:border-blue-500"
+                                >
+                                {RACER_STATUS_OPTIONS.map((st) => (
+                                    <option key={st} value={st} className="bg-zinc-900 text-white">
+                                    {st}
+                                    </option>
+                                ))}
+                                </select>
                             </td>
                             <td colSpan={2} className="py-3 px-3 text-right">
                                 <div className="flex items-center justify-end gap-1">
@@ -898,7 +916,11 @@
                         return (
                         <tr key={racer.id} className="hover:bg-zinc-800/40 transition-colors">
                             <td className="py-3 px-3 text-center font-bold text-white text-sm">
-                            {racer.pos === 'DNF' ? <span className="text-rose-500 font-bold">DNF</span> : (racer.pos || racer.lbpos || idx + 1)}
+                            {racer.pos === 'DNF' || ['DNF', 'DNS', 'DSQ', 'DNQ', 'Ret', 'NC'].includes(racer.status || '') ? (
+                                <span className="text-rose-500 font-bold">{racer.status || racer.pos}</span>
+                            ) : (
+                                racer.pos || racer.lbpos || idx + 1
+                            )}
                             </td>
                             <td className="py-3 px-3 text-center">
                             <span className="bg-blue-900/80 text-white font-bold px-2 py-0.5 rounded italic">
@@ -922,17 +944,25 @@
                             {racer.btTm || '-'}
                             </td>
                             <td className="py-3 px-3 text-center">
-                            <button
-                                type="button"
-                                onClick={() => handleToggleFinished(racer.id)}
-                                className={`px-2 py-1 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer ${
-                                racer.if
-                                    ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                                    : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
+                            <select
+                                value={racer.status || 'RUN'}
+                                onChange={(e) => handleUpdateRacerStatus(racer.id, e.target.value as RacerStatus)}
+                                className={`px-2 py-1 rounded text-xs font-bold uppercase transition-colors cursor-pointer border ${
+                                racer.status === 'RUN' || !racer.status
+                                    ? 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:border-zinc-500'
+                                    : racer.status === 'FIN'
+                                    ? 'bg-emerald-950 text-emerald-400 border-emerald-700'
+                                    : ['PIT', 'IN', 'OUT'].includes(racer.status)
+                                    ? 'bg-amber-950 text-amber-400 border-amber-700'
+                                    : 'bg-rose-950 text-rose-400 border-rose-700'
                                 }`}
                             >
-                                {racer.if ? '🏁 FINISHED' : 'RACING'}
-                            </button>
+                                {RACER_STATUS_OPTIONS.map((st) => (
+                                <option key={st} value={st} className="bg-zinc-900 text-white">
+                                    {st}
+                                </option>
+                                ))}
+                            </select>
                             </td>
                             <td className="py-3 px-3 text-center">
                             <div className="flex items-center justify-center gap-1">
