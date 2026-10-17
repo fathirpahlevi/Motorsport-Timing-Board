@@ -425,7 +425,8 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                       }}
                     >
                       <div className={`flex items-center grid-cols-7 w-[240px] h-full grid border-transparent relative z-20 shadow-xs`}>
-                        <div className="top-0 h-[30px]">
+                        {/* FINSIHED FLAG */}
+                        <div className="top-0 h-[30px]"> 
                         {(!rider.changeDirection || rider.changeDirection === 'steady') && (
                           
                           <img
