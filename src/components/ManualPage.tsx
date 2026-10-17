@@ -406,112 +406,94 @@
     };
 
     return (
-        <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans p-4 sm:p-8 selection:bg-blue-600 selection:text-white">
+        <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-blue-600 selection:text-white">
         {/* Top Navigation */}
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4 mb-6">
-            <div className="flex items-center gap-3">
-            <Link
-                to="/"
-                className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-800 px-4 py-2 rounded-lg transition-colors"
-            >
-                <ArrowLeft className="w-4 h-4" /> Back to Console
-            </Link>
-            <div className="h-6 w-px bg-zinc-800 hidden sm:block"></div>
-            <h1 className="text-xl font-black italic tracking-tight uppercase text-white font-mono flex items-center gap-2">
-                <FileText className="w-5 h-5 text-blue-500" />
-                MANUAL TIMING DESK
-            </h1>
-            </div>
+        <header className="border-b border-zinc-800 bg-zinc-900/90 backdrop-blur-md px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-0 z-40">
+            
+                <div className="flex items-center gap-3">
+                <Link
+                    to="/"
+                    className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-800 px-4 py-2 rounded-lg transition-colors"
+                >
+                    <ArrowLeft className="w-4 h-4" /> Back to Console
+                </Link>
+                <div className="h-6 w-px bg-zinc-800 hidden sm:block"></div>
+                <h1 className="text-xl font-black italic tracking-tight uppercase text-white font-mono flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-blue-500" />
+                    MANUAL TIMING DESK
+                </h1>
+                </div>
 
-            {/* Display Quick Navigation Links */}
-            <div className="flex flex-wrap items-center gap-2">
-            <Link
-                to="/sidePosition"
-                target="_blank"
-                className="text-xs font-bold uppercase tracking-wider text-blue-400 hover:text-blue-300 bg-blue-950/60 border border-blue-800/60 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
-            >
-                <Tv className="w-3.5 h-3.5" /> Side Position
-            </Link>
-            <Link
-                to="/startingGrid"
-                target="_blank"
-                className="text-xs font-bold uppercase tracking-wider text-amber-400 hover:text-amber-300 bg-amber-950/60 border border-amber-800/60 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
-            >
-                <LayoutGrid className="w-3.5 h-3.5" /> Starting Grid
-            </Link>
-            <Link
-                to="/result"
-                target="_blank"
-                className="text-xs font-bold uppercase tracking-wider text-emerald-400 hover:text-emerald-300 bg-emerald-950/60 border border-emerald-800/60 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
-            >
-                <Flag className="w-3.5 h-3.5" /> Results
-            </Link>
-            <Link
-                to="/trophy"
-                target="_blank"
-                className="text-xs font-bold uppercase tracking-wider text-purple-400 hover:text-purple-300 bg-purple-950/60 border border-purple-800/60 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
-            >
-                <Trophy className="w-3.5 h-3.5" /> Trophy
-            </Link>
-            </div>
-        </div>
+                {/* Display Quick Navigation Links */}
+                <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                        to="/sidePosition"
+                        target="_blank"
+                        className="text-xs font-bold uppercase tracking-wider text-blue-400 hover:text-blue-300 bg-blue-950/60 border border-blue-800/60 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
+                    >
+                        <Tv className="w-3.5 h-3.5" /> Side Position
+                    </Link>
+                    <Link
+                        to="/startingGrid"
+                        target="_blank"
+                        className="text-xs font-bold uppercase tracking-wider text-amber-400 hover:text-amber-300 bg-amber-950/60 border border-amber-800/60 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
+                    >
+                        <LayoutGrid className="w-3.5 h-3.5" /> Starting Grid
+                    </Link>
+                    <Link
+                        to="/result"
+                        target="_blank"
+                        className="text-xs font-bold uppercase tracking-wider text-emerald-400 hover:text-emerald-300 bg-emerald-950/60 border border-emerald-800/60 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
+                    >
+                        <Flag className="w-3.5 h-3.5" /> Results
+                    </Link>
+                    <Link
+                        to="/trophy"
+                        target="_blank"
+                        className="text-xs font-bold uppercase tracking-wider text-purple-400 hover:text-purple-300 bg-purple-950/60 border border-purple-800/60 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
+                    >
+                        <Trophy className="w-3.5 h-3.5" /> Trophy
+                    </Link>
+                </div>
+            
+                {/* PRE-RACE vs LIVE RACE SWITCHER */}
+                <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="text-xl font-black tracking-tight uppercase text-white font-mono">
+                        DATA MODE
+                    </h1>
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1 bg-zinc-950 rounded-lg p-1 border border-zinc-800 shrink-0">
+                        
+                        <button
+                        type="button"
+                        onClick={() => handleDirectSetManualMode(true)}
+                        className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                            isManualMode
+                            ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-950/50'
+                            : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                        }`}
+                        title="Show pre-set Starting Grid data on all displays before the race begins"
+                        >
+                        Manual
+                        </button>
+                        <button
+                        type="button"
+                        onClick={() => handleDirectSetManualMode(false)}
+                        className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                            !isManualMode
+                            ? 'bg-red-500 text-zinc-950 shadow-md shadow-emerald-950/50'
+                            : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                        }`}
+                        title="Switch to Speedhive live timing feed when the race starts"
+                        >
+                        Live
+                        </button>
+                    </div> 
+                </div>
 
+        </header>
         {/* Main Container */}
         <div className="max-w-7xl mx-auto space-y-6">
 
-            {/* MANUAL MODE TOGGLE BANNER */}
-            <div className={`p-6 rounded-2xl border transition-all flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl ${
-            isManualMode
-                ? 'bg-blue-950/80 border-blue-600 shadow-blue-950/50'
-                : 'bg-zinc-900/90 border-zinc-800'
-            }`}>
-            <div className="flex items-center gap-4">
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 ${
-                isManualMode ? 'bg-blue-600 text-white animate-pulse' : 'bg-zinc-800 text-zinc-500'
-                }`}>
-                <FileText className="w-7 h-7" />
-                </div>
-                <div>
-                <div className="flex items-center gap-2">
-                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded tracking-widest ${
-                    isManualMode ? 'bg-emerald-500 text-zinc-950' : 'bg-zinc-700 text-zinc-300'
-                    }`}>
-                    {isManualMode ? 'MANUAL MODE ACTIVE' : 'SPEEDHIVE LIVE MODE ACTIVE'}
-                    </span>
-                    <span className="text-xs font-mono text-zinc-400">
-                    {isManualMode ? 'Live Speedhive updates overridden' : 'Receiving Speedhive stream'}
-                    </span>
-                </div>
-                <h2 className="text-xl font-black uppercase tracking-tight text-white mt-1">
-                    {isManualMode ? 'Manual Race Telemetry Engine' : 'Enable Manual Overriding Mode'}
-                </h2>
-                <p className="text-xs text-zinc-400 max-w-xl mt-0.5">
-                    {isManualMode
-                    ? 'All timing displays (/sidePosition, /result, /trophy, /startingGrid) are now showing your manually entered racer data in real-time.'
-                    : 'Toggle ON to manually insert and control racers without relying on a Speedhive live timing feed.'}
-                </p>
-                </div>
-            </div>
-
-            <button
-                onClick={handleToggleManualMode}
-                className={`px-6 py-3 rounded-xl font-black uppercase tracking-wider text-xs flex items-center gap-2 shadow-lg transition-all cursor-pointer ${
-                isManualMode
-                    ? 'bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-emerald-950/50'
-                    : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-950/50'
-                }`}
-            >
-                {isManualMode ? (
-                <>
-                    <ToggleRight className="w-6 h-6 text-zinc-950" /> MANUAL MODE ON
-                </>
-                ) : (
-                <>
-                    <ToggleLeft className="w-6 h-6" /> ENABLE MANUAL MODE
-                </>
-                )}
-            </button>
-            </div>
 
             {/* STARTING GRID IMPORTER (CSV & GEMINI MULTIMODAL SCREENSHOTS) */}
             <StartingGridImporter
@@ -525,16 +507,16 @@
             />
 
             {/* EVENT & SESSION INFO EDITORS */}
-            <form onSubmit={handleUpdateRaceInfo} className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-6 shadow-xl space-y-4">
+            <form onSubmit={handleUpdateRaceInfo} className="bg-zinc-900/80 border border-zinc-800 p-3 shadow-xl space-y-4">
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
                 <h3 className="text-sm font-black uppercase tracking-wider text-blue-400 flex items-center gap-2 font-mono">
-                <Sparkles className="w-4 h-4" /> Event & Session Titles
+                Event & Session Titles
                 </h3>
                 <button
                 type="submit"
                 className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
                 >
-                <Save className="w-3.5 h-3.5" /> Broadcast Titles
+                <Save className="w-3.5 h-3.5" /> Save Titles
                 </button>
             </div>
 

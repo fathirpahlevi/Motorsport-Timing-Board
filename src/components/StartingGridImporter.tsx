@@ -644,15 +644,15 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
         setIsDraggingCard(false);
       }}
       onDrop={handleGeneralFileDrop}
-      className="relative bg-zinc-900/90 border border-zinc-800 rounded-2xl p-6 shadow-2xl space-y-6 overflow-hidden"
+      className="relative bg-zinc-900/90 border border-zinc-800 p-3 shadow-2xl space-y-6 overflow-hidden"
     >
       {/* FULL CARD DRAG OVERLAY */}
       {isDraggingCard && (
-        <div className="absolute inset-0 z-50 bg-purple-950/90 backdrop-blur-sm border-4 border-dashed border-purple-400 rounded-2xl flex flex-col items-center justify-center p-6 text-center animate-pulse">
-          <div className="w-20 h-20 bg-purple-600 rounded-full flex items-center justify-center text-white mb-4 shadow-xl">
+        <div className="absolute inset-0 z-50 bg-zinc-200/90 backdrop-blur-sm border-4 border-dashed border-zinc-400 flex flex-col items-center justify-center p-6 text-center animate-pulse">
+          <div className="w-20 h-20 bg-zinc-600 rounded-full flex items-center justify-center text-white mb-4 shadow-xl">
             <Upload className="w-10 h-10 animate-bounce" />
           </div>
-          <h3 className="text-xl font-black text-white uppercase font-mono tracking-wider">
+          <h3 className="text-xl font-black text-zinc-700 uppercase font-mono tracking-wider">
             Drop Screenshot(s) or CSV File Here
           </h3>
           <p className="text-sm text-purple-200 mt-2 font-mono">
@@ -662,53 +662,11 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
       )}
 
       {/* HEADER & QUICK MODE SWITCHER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-1 border-b border-zinc-800 pb-5">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-black uppercase tracking-widest bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded">
-              STARTING GRID AUTOMATION
-            </span>
-            <span className="text-xs font-mono text-zinc-400">
-              CSV Upload & Multimodal Gemini OCR
-            </span>
-          </div>
-          <h2 className="text-lg font-black uppercase tracking-tight text-white mt-1 flex items-center gap-2 font-mono">
-            <FileSpreadsheet className="w-5 h-5 text-amber-400" />
-            Import & Generate Starting Grid Data
+          <h2 className="text-lg font-black uppercase tracking-tight text-white flex items-center gap-2 font-mono">
+            Import to load manual data
           </h2>
-          <p className="text-xs text-zinc-400 max-w-2xl mt-0.5">
-            Quickly load pre-race starting grid lineups by uploading or pasting a CSV, or uploading one or more screenshot images with Gemini AI extraction.
-          </p>
-        </div>
-
-        {/* PRE-RACE vs LIVE RACE SWITCHER */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-zinc-950 p-2 rounded-xl border border-zinc-800 shrink-0">
-          <button
-            type="button"
-            onClick={() => onToggleManualMode(true)}
-            className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
-              isManualMode
-                ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-950/50'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
-            }`}
-            title="Show pre-set Starting Grid data on all displays before the race begins"
-          >
-            <Radio className="w-4 h-4" />
-            Pre-Race Grid (Manual)
-          </button>
-          <button
-            type="button"
-            onClick={() => onToggleManualMode(false)}
-            className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
-              !isManualMode
-                ? 'bg-emerald-500 text-zinc-950 shadow-md shadow-emerald-950/50'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
-            }`}
-            title="Switch to Speedhive live timing feed when the race starts"
-          >
-            <Tv className="w-4 h-4" />
-            Race Started (Live)
-          </button>
         </div>
       </div>
 
@@ -717,27 +675,26 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
         <button
           type="button"
           onClick={() => setActiveTab('csv')}
-          className={`px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
+          className={`px-4 py-2 font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
             activeTab === 'csv'
-              ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
+              ? 'bg-blue-600 text-white shadow-lg '
               : 'bg-zinc-800/80 text-zinc-400 hover:text-white hover:bg-zinc-800'
           }`}
         >
           <FileText className="w-4 h-4" />
-          1. CSV Import & Paste
+          CSV Import & Paste
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('images')}
-          className={`px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
+          className={`px-4 py-2 font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
             activeTab === 'images'
-              ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-900/40'
+              ? 'bg-blue-600 text-white shadow-lg'
               : 'bg-zinc-800/80 text-zinc-400 hover:text-white hover:bg-zinc-800'
           }`}
         >
-          <Sparkles className="w-4 h-4 text-amber-300" />
-          2. Screenshot Images (Gemini AI Multimodal)
+          Images / Screenshot
           {uploadedImages.length > 0 && (
             <span className="bg-white/20 text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono">
               {uploadedImages.length}
@@ -752,7 +709,6 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-black uppercase text-white font-mono flex items-center gap-2">
-                <FileSpreadsheet className="w-4 h-4 text-blue-400" />
                 Upload CSV File or Paste Raw Text
               </h3>
               <p className="text-[11px] text-zinc-400">
@@ -861,8 +817,7 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-black uppercase text-white font-mono flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-400" />
-                Multi-Image Starting Grid Screenshot Scanner
+                Image Import OCR
               </h3>
               <p className="text-[11px] text-zinc-400">
                 Upload 1 or more screenshots of the starting grid document or timing sheets (supports multiple pages / columns).
@@ -906,7 +861,7 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
             onDrop={handleGeneralFileDrop}
             className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
               isDraggingImages
-                ? 'border-purple-400 bg-purple-950/70 ring-4 ring-purple-500/30 scale-[1.01]'
+                ? 'border-purple-400 bg-purple-zinc-200/70 ring-4 ring-purple-500/30 scale-[1.01]'
                 : 'border-zinc-800 hover:border-purple-500 bg-zinc-900/40 hover:bg-zinc-900/70'
             }`}
           >
@@ -928,14 +883,9 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
                 <span className="text-purple-300 text-sm">Release to Drop Screenshot Image(s) Here!</span>
               ) : (
                 <>
-                  <span className="text-purple-400 font-bold">Drag & Drop images here</span>, click to browse, or press <span className="text-emerald-400 font-mono font-black">Ctrl+V / Cmd+V</span> to paste!
+                  <span className="text-white font-bold">Drag & Drop images here</span>, click to browse, or press <span className="text-emerald-400 font-mono font-black">Ctrl+V / Cmd+V</span> to paste!
                 </>
               )}
-            </p>
-            <p className="text-[10px] text-zinc-400 mt-1.5 flex flex-wrap items-center justify-center gap-2">
-              <span className="bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">📋 Clipboard Paste Supported</span>
-              <span className="bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">🖱️ Drag & Drop Multi-Image</span>
-              <span className="bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">PNG / JPG / WEBP</span>
             </p>
           </div>
 
@@ -953,16 +903,6 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
                 Ctrl+V
               </span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => imageFileInputRef.current?.click()}
-              className="px-4 py-2 bg-purple-900/60 hover:bg-purple-800/80 border border-purple-700/60 text-purple-200 hover:text-white text-xs font-bold uppercase rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md"
-              title="Select images from your computer's file manager"
-            >
-              <Upload className="w-4 h-4 text-purple-300" />
-              Choose from File Manager
-            </button>
           </div>
 
           {/* Uploaded Images Gallery */}
@@ -973,7 +913,7 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
                 <button
                   type="button"
                   onClick={() => imageFileInputRef.current?.click()}
-                  className="text-purple-400 hover:text-purple-300 flex items-center gap-1 cursor-pointer font-bold"
+                  className="text-zinc-400 hover:text-zinc-200 flex items-center gap-1 cursor-pointer font-bold"
                 >
                   <Plus className="w-3.5 h-3.5" /> Add More Images
                 </button>
@@ -1039,10 +979,6 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
 
           {/* Gemini Trigger Button */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-            <div className="flex items-center gap-2 text-xs font-mono text-zinc-400">
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>Powered by Gemini 3.8 Flash Multimodal OCR</span>
-            </div>
 
             <button
               type="button"
@@ -1051,18 +987,17 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
               className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg ${
                 isExtracting || uploadedImages.length === 0
                   ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed opacity-60'
-                  : 'bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white shadow-purple-950/50'
+                  : 'bg-blue-600 hover:bg-blue-500 text-white'
               }`}
             >
               {isExtracting ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  Analyzing {uploadedImages.length} Image{uploadedImages.length > 1 ? 's' : ''} with Gemini AI...
+                  Analyzing {uploadedImages.length} Image{uploadedImages.length > 1 ? 's' : ''}...
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-4 h-4" />
-                  Extract Starting Grid with Gemini AI ({uploadedImages.length} Image{uploadedImages.length > 1 ? 's' : ''})
+                  Extract ({uploadedImages.length} Image{uploadedImages.length > 1 ? 's' : ''})
                 </>
               )}
             </button>

@@ -231,19 +231,32 @@ export const LowerThirdControlPage: React.FC<LowerThirdControlPageProps> = ({
             </h1>
           </div>
         </div>
-
+        
         {/* Global Action & Link to /lowerthird */}
         <div className="flex items-center gap-3">
-          <a
-            href="/lowerthird"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold uppercase rounded-lg border border-zinc-700 flex items-center gap-2 transition-colors cursor-pointer"
-            title="Open Lower Third overlay page in separate window (for OBS Browser Source)"
-          >
-            <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
-            <span>Open Overlay (/lowerthird)</span>
-          </a>
+          
+          {/* APPEND */}
+            <button
+              type="button"
+              onClick={handleActivateChecked}
+              disabled={stagedSelectedIds.length === 0}
+              className={`w-full py-2.5 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg ${
+                stagedSelectedIds.length === 0
+                  ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed opacity-60'
+                  : hasUnappliedChanges
+                  ? 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-zinc-950 shadow-amber-950/50 animate-pulse'
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/40'
+              }`}
+            >
+              <CheckSquare className="w-4 h-4" />
+              <span>
+                {hasUnappliedChanges
+                  ? `Apply & Send ${stagedSelectedIds.length} Racer${
+                      stagedSelectedIds.length > 1 ? 's' : ''
+                    } to Lower Third`
+                  : `Selection Active (${stagedSelectedIds.length} Racers)`}
+              </span>
+            </button>
 
           {/* Main ON AIR / OFF AIR Toggle Button */}
           <button
@@ -258,12 +271,12 @@ export const LowerThirdControlPage: React.FC<LowerThirdControlPageProps> = ({
             {broadcastState.visible ? (
               <>
                 <Radio className="w-4 h-4 text-white animate-spin" />
-                <span>ON AIR (CLICK TO HIDE)</span>
+                <span>HIDE</span>
               </>
             ) : (
               <>
                 <Eye className="w-4 h-4 text-amber-400" />
-                <span>OFF AIR (CLICK TO SHOW)</span>
+                <span>SHOW</span>
               </>
             )}
           </button>
@@ -548,7 +561,7 @@ export const LowerThirdControlPage: React.FC<LowerThirdControlPageProps> = ({
                           {/* Row 2: Team name */}
                           <div className="px-2.5 py-1 bg-zinc-950">
                             <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 truncate block font-mono">
-                              {r.cb || 'INDEPENDENT'}
+                              {r.cb || '-'}
                             </span>
                           </div>
                         </div>

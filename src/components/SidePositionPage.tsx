@@ -274,7 +274,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                   </div>
                 )}
 
-                {control.ltg && flag !== 3 && !control.start && (
+                {control.ltg && flag !== 3 && (!control.start && !control.finish) && (
                   <div className="h-min w-full">
                     {(lapsToGo === 1 )? (
                     <div className="text-3xl numberFont text-black leading-none">
@@ -424,7 +424,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                         }
                       }}
                     >
-                      <div className={`flex items-center grid-cols-7 w-[240px] h-full grid border-transparent relative z-20 bg-zinc-100 shadow-xs`}>
+                      <div className={`flex items-center grid-cols-7 w-[240px] h-full grid border-transparent relative z-20 shadow-xs`}>
                         <div className="top-0 h-[30px]">
                         {(!rider.changeDirection || rider.changeDirection === 'steady') && (
                           

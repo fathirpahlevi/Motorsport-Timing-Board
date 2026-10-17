@@ -99,11 +99,11 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
     },[raceLaps]);
 
     const timingOptions: Array<{ id: 'lapCount' | 'lastLap' | 'gap' | 'interval' | 'bestTime'; label: string }> = [
-        { id: 'lapCount', label: 'Lap Count' },
-        { id: 'lastLap', label: 'Last Lap' },
+        { id: 'lapCount', label: 'Lap' },
+        { id: 'lastLap', label: 'Last' },
         { id: 'gap', label: 'Gap' },
-        { id: 'interval', label: 'Interval' },
-        { id: 'bestTime', label: 'Best Time' },
+        { id: 'interval', label: 'Int' },
+        { id: 'bestTime', label: 'Best' },
     ];
 
     const currentTimingMode: 'lapCount' | 'lastLap' | 'gap' | 'interval' | 'bestTime' =
@@ -328,7 +328,7 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
 
             <div className='grid grid-cols-3 gap-5 mb-7'>
                 <div className='flex flex-col gap-3'>
-                    <button 
+                    {/* <button 
                     onClick={() => {
                             sendControlCommand("input",true);
                             sendControlCommand("rtmp",false);
@@ -337,7 +337,7 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
                     className="w-full py-3 px-6 text-white font-semibold rounded-lg bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-400 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
                     >
                     VIDEO INPUT
-                    </button>
+                    </button> */}
 
                     <button 
                     onClick={() => {
@@ -380,7 +380,10 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
                         {errorMessage && (<div className='px-2 text-left bg-red-100 text-red-800 text-sm'>{errorMessage}</div>)}
                     </div>)}
                     {syncState.rtmp && (
-                    <div className='flex flex-col gap-1.5 w-full font-sans text-left'>
+                    <div className='flex flex-col gap-1.5 w-full font-sans text-left text-wrap'>
+                        <h2 className='font-medium text-gray-800 font-semibold'>URL Example:</h2>
+                        <p className="text-sm">http://<span className="text-red-500 font-bold">localhost</span>:8889/<span className="text-red-500 font-bold">live/stream</span>/whep</p>
+                        <p className="text-sm">http://<span className="text-red-500 font-bold">192.168.8.147</span>:8889/<span className="text-red-500 font-bold">live/drone1</span>/whep</p>
                         <label className="text-sm font-semibold text-gray-700">
                         Set the RTMP URL
                         </label>
@@ -431,7 +434,7 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
                     <div className="col-span-2 flex flex-col gap-2.5 p-3.5 bg-zinc-100 border border-zinc-300 rounded-xl my-1">
                       <div className="flex items-center justify-between">
                         <span className="uppercase text-gray-700 font-bold text-xs tracking-wider">
-                          Tower Timing Column
+                          Timing/Lap Control
                         </span>
                         <span className={`text-[10px] font-mono uppercase font-bold px-2 py-0.5 rounded ${
                           isTimingVisible ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-200 text-zinc-600'
@@ -497,13 +500,13 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
                       <div className="flex items-center justify-between">
                         <div className="flex flex-col">
                           <span className="uppercase text-gray-700 font-bold text-xs tracking-wider">
-                            Tower Racers Display ({riders?.length || 0} Racers Total)
+                            Racers ({riders?.length || 0} Total)
                           </span>
                           <span className="text-[11px] text-zinc-500 font-medium">
-                            Max 19 racers on screen • {towerPagination.pageRangeText ? `Showing: P${towerPagination.pageRangeText}` : 'All shown'}
+                            {towerPagination.pageRangeText ? `Showing: P${towerPagination.pageRangeText}` : 'All shown'}
                           </span>
                         </div>
-                        <span className="text-xs font-mono font-bold bg-blue-100 text-blue-800 px-2.5 py-1 rounded-md border border-blue-200">
+                        <span className="text-xs font-mono font-bold text-red-500">
                           Page {towerPagination.currentPage + 1} / {towerPagination.totalPages}
                         </span>
                       </div>
