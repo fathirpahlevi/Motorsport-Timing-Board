@@ -39,7 +39,7 @@ import {
   ChevronUp,
   ChevronDown
 } from 'lucide-react';
-import { RiderResult, SignalRPacket, ControlState, RaceEventData, RacerResult, LowerThirdState, RiderManualOverride, RacerStatus } from './types';
+import { RiderResult, SignalRPacket, ControlState, RaceEventData, RacerResult, LowerThirdState, RiderManualOverride, RacerStatus, WeatherState } from './types';
 import { INITIAL_RIDERS, recalculateGaps, parseLapTimeToMs, formatLapTime } from './data';
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { RaceResultPage } from './components/resultPage';
@@ -52,6 +52,9 @@ import { WebRTCVideoPlayer } from './components/rtmpVideo';
 import { ManualPage } from './components/ManualPage';
 import { LowerThirdPage } from './components/LowerThirdPage';
 import { LowerThirdControlPage } from './components/LowerThirdControlPage';
+import { WeatherPage } from './components/WeatherPage';
+import { WeatherControlPage } from './components/WeatherControlPage';
+import { INITIAL_WEATHER_STATE } from './weatherData';
 
 import { ListSelectInput, SelectOption } from './components/lists';
 
@@ -260,6 +263,9 @@ export default function App() {
     position: 'left',
     selectedRiderIds: [],
   });
+
+  // Weather Graphics State
+  const [weatherState, setWeatherState] = useState<WeatherState>(INITIAL_WEATHER_STATE);
 
   // Active Riders / Telemetry grid
   const [isManualMode, setIsManualMode] = useState<boolean>(false);
@@ -1132,6 +1138,9 @@ export default function App() {
                     : [],
                 });
               }
+              if (message.raceState.weather) {
+                setWeatherState(message.raceState.weather);
+              }
             }
           }
           else if (message.type === "manualDataSync") {
@@ -1198,6 +1207,11 @@ export default function App() {
               position: message.position || 'left',
               selectedRiderIds: Array.isArray(message.selectedRiderIds) ? message.selectedRiderIds : [],
             });
+          }
+          else if (message.type === "weatherControl") {
+            if (message.weather) {
+              setWeatherState(message.weather);
+            }
           }
 
         } catch (err: any) {
@@ -1708,6 +1722,33 @@ export default function App() {
         <Route 
           path="/lowerThirdControl" 
           element={<Navigate to="/lowerthirdcontrol" replace />} 
+        />
+        <Route
+          path="/weather"
+          element={
+            <WeatherPage
+              weatherState={weatherState}
+              socket={connectionRef.current}
+            />
+          }
+        />
+        <Route 
+          path="/Weather" 
+          element={<Navigate to="/weather" replace />} 
+        />
+        <Route
+          path="/weathercontrol"
+          element={
+            <WeatherControlPage
+              socket={connectionRef.current}
+              weatherState={weatherState}
+              onUpdateWeatherState={(updated) => setWeatherState(updated)}
+            />
+          }
+        />
+        <Route 
+          path="/weatherControl" 
+          element={<Navigate to="/weathercontrol" replace />} 
         />
       </Routes>
     </BrowserRouter>

@@ -126,3 +126,79 @@ export interface LowerThirdState {
   selectedRiderIds: string[];
 }
 
+export interface GeocodingResult {
+  id: number;
+  name: string;
+  latitude: number;
+  longitude: number;
+  elevation?: number;
+  feature_code?: string;
+  country_code?: string;
+  admin1?: string;
+  admin2?: string;
+  country?: string;
+  timezone?: string;
+  [key: string]: any;
+}
+
+export interface OpenMeteoWeatherResponse {
+  latitude: number;
+  longitude: number;
+  generationtime_ms?: number;
+  utc_offset_seconds?: number;
+  timezone?: string;
+  timezone_abbreviation?: string;
+  elevation?: number;
+  current_units?: Record<string, string>;
+  current?: {
+    time: string;
+    interval?: number;
+    temperature_2m: number;
+    relative_humidity_2m: number;
+    apparent_temperature: number;
+    is_day: number;
+    precipitation: number;
+    rain: number;
+    showers: number;
+    weather_code: number;
+    cloud_cover: number;
+    wind_speed_10m: number;
+    wind_direction_10m: number;
+    [key: string]: any;
+  };
+  hourly_units?: Record<string, string>;
+  hourly?: {
+    time: string[];
+    temperature_2m: number[];
+    relative_humidity_2m: number[];
+    precipitation_probability: number[];
+    precipitation: number[];
+    weather_code: number[];
+    [key: string]: any;
+  };
+  daily_units?: Record<string, string>;
+  daily?: {
+    time: string[];
+    weather_code: number[];
+    temperature_2m_max: number[];
+    temperature_2m_min: number[];
+    precipitation_sum: number[];
+    precipitation_probability_max: number[];
+    sunrise: string[];
+    sunset: string[];
+    [key: string]: any;
+  };
+  [key: string]: any;
+}
+
+export interface WeatherState {
+  visible: boolean;
+  mode: 'simple' | 'detailed';
+  regionName: string;
+  regionAdmin: string;
+  latitude: number;
+  longitude: number;
+  weatherData: OpenMeteoWeatherResponse | null;
+  lastUpdated?: string;
+}
+

@@ -8,6 +8,7 @@ import { WebSocketServer, WebSocket as WSClient } from "ws";
 import { HubConnectionBuilder, HubConnection } from "@microsoft/signalr";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
+import { INITIAL_WEATHER_STATE } from "./src/weatherData";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -43,6 +44,7 @@ let raceState = {
     position: 'left' as 'left' | 'center' | 'right',
     selectedRiderIds: [] as string[],
   },
+  weather: INITIAL_WEATHER_STATE,
 };
 const allClients = new Set<WSClient>();
 
@@ -82,6 +84,7 @@ function saveRaceStateCache() {
       manualSessionInfo: raceState.manualSessionInfo,
       manualOverrides: raceState.manualOverrides,
       lowerThird: raceState.lowerThird,
+      weather: raceState.weather,
       sessionInfo: raceState.sessionInfo,
       controlAction: raceState.controlAction,
     };
@@ -102,6 +105,7 @@ function loadRaceStateCache() {
       if (data.manualSessionInfo) raceState.manualSessionInfo = data.manualSessionInfo;
       if (data.manualOverrides) raceState.manualOverrides = data.manualOverrides;
       if (data.lowerThird) raceState.lowerThird = data.lowerThird;
+      if (data.weather) raceState.weather = data.weather;
       if (data.sessionInfo) raceState.sessionInfo = data.sessionInfo;
       if (data.controlAction) raceState.controlAction = data.controlAction;
       console.log(`[Cache] Loaded race state from cache. ManualMode=${raceState.isManualMode}, ManualRiders=${raceState.manualRiders.length}`);
@@ -559,6 +563,13 @@ ${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
       });
     }
 
+    if (raceState.weather) {
+      sendToClient(ws, {
+        type: "weatherControl",
+        weather: raceState.weather,
+      });
+    }
+
     // If there is already an active session, notify them to switch/subscribe
     if (savedID.sessionId) {
       sendToClient(ws, {
@@ -733,6 +744,12 @@ ${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
               selectedRiderIds: raceState.lowerThird.selectedRiderIds,
             });
           }
+          if (raceState.weather) {
+            sendToClient(ws, {
+              type: "weatherControl",
+              weather: raceState.weather,
+            });
+          }
         }
         else if (message.type === 'lowerThirdControl') {
           raceState.lowerThird = {
@@ -747,6 +764,18 @@ ${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
             visible: raceState.lowerThird.visible,
             position: raceState.lowerThird.position,
             selectedRiderIds: raceState.lowerThird.selectedRiderIds,
+          });
+        }
+        else if (message.type === 'weatherControl') {
+          raceState.weather = {
+            ...raceState.weather,
+            ...(message.weather || {}),
+          };
+          saveRaceStateCache();
+          console.log(`[WS Server] Weather Control: visible=${raceState.weather.visible}, mode=${raceState.weather.mode}, region=${raceState.weather.regionName}`);
+          broadcastToAll({
+            type: "weatherControl",
+            weather: raceState.weather,
           });
         }
         else if (message.type === 'manualDataSync') {

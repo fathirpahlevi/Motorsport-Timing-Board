@@ -805,6 +805,20 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
                         Lower Third Overlay
                     </a>
                     <a
+                        href="/weathercontrol"
+                        className="p-2.5 bg-cyan-400 text-zinc-950 font-bold rounded-lg text-center hover:bg-cyan-300 transition-colors uppercase"
+                    >
+                        Weather Control
+                    </a>
+                    <a
+                        href="/weather"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
+                    >
+                        Weather Overlay
+                    </a>
+                    <a
                         href="/manual"
                         className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
                     >
