@@ -315,6 +315,25 @@ export default function App() {
 
   // Track previous state for flashes and change directions
   const previousPositionsRef = useRef<{ [riderId: string]: number }>({});
+
+  // Track all rider IDs that legitimately belong to the CURRENT active session
+  const activeSessionRiderIdsRef = useRef<Set<string>>(new Set());
+
+  // Cleanly wipe riders and session state when switching to a new session
+  const resetSessionRiders = (newSessionId?: string) => {
+    activeSessionRiderIdsRef.current = new Set();
+    liveSpeedhiveRidersRef.current = [];
+    hasLiveSpeedhiveDataRef.current = false;
+    previousPositionsRef.current = {};
+    setRiders([]);
+    setSessionBestTime('0:00.000');
+    setSessionBestRider('-');
+    setLatestAnnouncement('');
+    if (newSessionId) {
+      setSessionId(newSessionId);
+      sessionIdRef.current = newSessionId;
+    }
+  };
   
   // Collapsible Setup drawer state
   const [isSetupOpen, setIsSetupOpen] = useState<boolean>(false);
@@ -565,9 +584,17 @@ export default function App() {
       });
 
       const incomingIds = new Set(incomingResults.map((r: any) => r.id));
-      const omittedRiders = prevRiders.filter(
-        (r) => !incomingIds.has(r.id) && r.sesId !== 'ses_ycr1_ycr2_expert_novice' && !r.id.startsWith('manual-rider-')
-      );
+      // Track all incoming rider IDs as known members of this active session
+      incomingResults.forEach((r: any) => {
+        if (r.id) activeSessionRiderIdsRef.current.add(r.id);
+      });
+
+      // Strictly discard any riders from prior sessions that may have been lingering in prevRiders
+      const omittedRiders = prevRiders.filter((r) => {
+        if (incomingIds.has(r.id)) return false;
+        if (r.id.startsWith('manual-rider-')) return true;
+        return activeSessionRiderIdsRef.current.has(r.id);
+      });
       
       const fullRaceGroup = [...mergedRiders, ...omittedRiders];
       const sortedPack = recalculateGaps(fullRaceGroup);
@@ -661,8 +688,9 @@ export default function App() {
       if (data.id) setSessionId(data.id);
       if (data.eventId) setEventId(data.eventId);
       if (data.l && Array.isArray(data.l)) {
-      // Map and preserve the initial raw gp and df values from Speedhive
-      const rawGapsMap = new Map<string, { gp?: string; df?: string }>();
+        activeSessionRiderIdsRef.current = new Set(data.l.map((r: any) => r.id));
+        // Map and preserve the initial raw gp and df values from Speedhive
+        const rawGapsMap = new Map<string, { gp?: string; df?: string }>();
       data.l.forEach((r: RiderResult) => {
         rawGapsMap.set(r.id, { gp: r.gp, df: r.df });
       });
@@ -791,12 +819,14 @@ export default function App() {
       socket.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
-          if (message.type === "newConnection") {
-            addWebSocketLog('system', `📡 New connection detected`);
-            if(message.sessionId !== sessionIdRef.current) {
-              // console.log("New Session Id", message.sessionId);   
-              setLatestAnnouncement("");
-              setSessionId(message.sessionId);
+          if (message.type === "sessionReset") {
+            addWebSocketLog('system', `🔄 Session reset by server: ${message.sessionId || ''}`);
+            resetSessionRiders(message.sessionId);
+          }
+          else if (message.type === "newConnection") {
+            addWebSocketLog('system', `📡 New connection detected: ${message.sessionId || ''}`);
+            if (message.sessionId && message.sessionId !== sessionIdRef.current) {
+              resetSessionRiders(message.sessionId);
             }
           }
           else if(message.type === "speedhiveURL"){
@@ -921,6 +951,10 @@ export default function App() {
               setConnectionStatus('connected');
             }
           } else if (message.type === "initialData") {
+            if (message.sessionId && sessionIdRef.current && message.sessionId !== sessionIdRef.current) {
+              console.warn(`[Client] Ignoring initialData for stale session: ${message.sessionId} (active: ${sessionIdRef.current})`);
+              return;
+            }
             addWebSocketLog('in', `📥 Received fresh initial data from Speedhive`);
             const data = message.data;
             if (data) {
@@ -933,6 +967,7 @@ export default function App() {
               if (typeof data.f === "number") setFlag(data.f);
 
               if (Array.isArray(data.l)) {
+                activeSessionRiderIdsRef.current = new Set(data.l.map((r: any) => r.id));
                 let fMs = Infinity;
                 let fId: string | null = null;
                 data.l.forEach((r: RiderResult) => {
@@ -959,10 +994,15 @@ export default function App() {
                   setRiders(applyManualOverridesToList(sorted));
                 }
               } else if (Array.isArray(data.results)) {
+                activeSessionRiderIdsRef.current = new Set(data.results.map((r: any) => r.id));
                 injectSignalRPacket(data);
               }
             }
           } else if (message.type === "resultsForSessionReceived") {
+            if (message.sessionId && sessionIdRef.current && message.sessionId !== sessionIdRef.current) {
+              console.warn(`[Client] Ignoring resultsForSessionReceived for stale session: ${message.sessionId} (active: ${sessionIdRef.current})`);
+              return;
+            }
             addWebSocketLog('in', `📥 resultsForSessionReceived websocket frame parsed`);
             const data = message.data;
             if (data) {
@@ -973,6 +1013,9 @@ export default function App() {
               }
             }
           } else if (message.type === "sessionAddedOrUpdated") {
+            if (message.sessionId && sessionIdRef.current && message.sessionId !== sessionIdRef.current) {
+              return;
+            }
             addWebSocketLog('in', `🔔 Feed event: sessionAddedOrUpdated`);
             const data = message.data;
             if (data && !isManualModeRef.current) {
@@ -1275,6 +1318,16 @@ export default function App() {
     }
 
     setAutoSimulate(false); // disable simulator on real speedhive load
+    resetSessionRiders(sessionId);
+
+    // Notify backend WebSocket proxy to switch to this URL
+    if (connectionRef.current && connectionRef.current.readyState === WebSocket.OPEN) {
+      connectionRef.current.send(JSON.stringify({
+        type: 'speedhiveURL',
+        url: urlToUse
+      }));
+    }
+
     // 1. Load initial timing tables
     if (eventId) {
       await fetchInitialData(eventId, sessionId);
