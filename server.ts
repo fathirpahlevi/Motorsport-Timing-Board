@@ -25,6 +25,7 @@ interface SessionSubscription {
 }
 let savedID = {eventId: "", sessionId: ""};
 let raceState = {
+  handlingNewSession:false,
   eventId: "",
   sessionId: "",
   speedhiveUrl: "",
@@ -116,7 +117,7 @@ function loadRaceStateCache() {
 }
 
 async function startServer() {
-  loadRaceStateCache();
+  // loadRaceStateCache();
   const app = express();
   const PORT = 3000;
 
@@ -293,41 +294,47 @@ ${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
     }
 
     const apiUrl = `https://lt-api.speedhive.com/api/events/${savedID.eventId}/sessions/${savedID.sessionId}/data`;
-    console.log(`[Proxy] Fetching initial data from: ${apiUrl}`);
-    try {
-      const response = await fetch(apiUrl, {
-        headers: {
-          "accept": "application/json",
-          "origin": "https://speedhive.mylaps.com",
-          "referer": "https://speedhive.mylaps.com/"
+    console.log(`[Proxy] Fetching initial data from: ${apiUrl}`); //Proxy initial data
+    // if(!raceState.handlingNewSession){
+      try {
+        // raceState.handlingNewSession = true;
+        
+        const response = await fetch(apiUrl, {
+          headers: {
+            "accept": "application/json",
+            "origin": "https://speedhive.mylaps.com",
+            "referer": "https://speedhive.mylaps.com/"
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Speedhive API returned status ${response.status}`);
         }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Speedhive API returned status ${response.status}`);
+        const data = await response.json();
+        console.log(`[Proxy] Initial Data Fetched`);
+        
+        // Update our server-side cache
+        raceState.results = data;
+        if (data.eNam || data.rnNam || data.gNam || data.btLpTim || data.ls || data.lsTg || typeof data.f === "number") {
+          raceState.sessionInfo = {
+            eNam: data.eNam,
+            rnNam: data.rnNam,
+            gNam: data.gNam,
+            btLpTim: data.btLpTim,
+            ls: data.ls,
+            lsTg: data.lsTg,
+            f: data.f
+          };
+        }
+        
+        res.json(data);
+        raceState.handlingNewSession = false;
+      } catch (error: any) {
+        console.error("[Proxy Error]", error);
+        res.status(500).json({ error: error.message || "Failed to fetch from Speedhive API" });
+        raceState.handlingNewSession = false;
       }
-      const data = await response.json();
-      console.log(`[Proxy] Initial Data Fetched`);
-      
-      // Update our server-side cache
-      raceState.results = data;
-      if (data.eNam || data.rnNam || data.gNam || data.btLpTim || data.ls || data.lsTg || typeof data.f === "number") {
-        raceState.sessionInfo = {
-          eNam: data.eNam,
-          rnNam: data.rnNam,
-          gNam: data.gNam,
-          btLpTim: data.btLpTim,
-          ls: data.ls,
-          lsTg: data.lsTg,
-          f: data.f
-        };
-      }
-      
-      res.json(data);
-    } catch (error: any) {
-      console.error("[Proxy Error]", error);
-      res.status(500).json({ error: error.message || "Failed to fetch from Speedhive API" });
-    }
+    // }
   });
 
   // Helper to send messages to frontends
@@ -415,9 +422,11 @@ ${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
 
     // Fetch fresh baseline data from Speedhive REST API if eventId is available
     if (savedID.eventId && savedID.sessionId) {
+      raceState.handlingNewSession = true;
       try {
         const apiUrl = `https://lt-api.speedhive.com/api/events/${savedID.eventId}/sessions/${savedID.sessionId}/data`;
-        console.log(`[Proxy] Fetching fresh baseline data: ${apiUrl}`);
+        broadcastToAll({ type: "status", status: "connecting", sessionId: targetSessionId });
+        console.log(`[Proxy] Fetching fresh baseline data: ${apiUrl}`); 
         const response = await fetch(apiUrl, {
           headers: {
             "accept": "application/json",
@@ -444,9 +453,10 @@ ${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
           broadcastToAll({ type: "resultsForSessionReceived", data: freshData });
           broadcastToAll({ type: "sessionAddedOrUpdated", data: raceState.sessionInfo });
           broadcastToAll({ type: "manualDataSync", isManualMode: false });
-        }
+        }raceState.handlingNewSession = false;
       } catch (err) {
         console.error("[Proxy Error fetching fresh data]", err);
+        raceState.handlingNewSession = false;
       }
     }
 
@@ -837,19 +847,19 @@ ${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
           broadcastToAll({ type: "speedhiveURL", url: message.url });
           sendToClient(ws, { type: "speedhiveURL", url: message.url });
 
-          if (url) {
-            const parsed = parseSpeedhiveUrl(url);
-            if (parsed.sessionId) {
-              console.log(`[WS Server] Auto-connecting Speedhive session: sessionId=${parsed.sessionId}, eventId=${parsed.eventId}`);
-              // Switch to live mode, reset manual riders and previous session results
-              raceState.isManualMode = false;
-              raceState.manualRiders = [];
-              raceState.manualSessionInfo = undefined;
-              raceState.results = null;
-              saveRaceStateCache();
-              await startOrReconnectSignalRSession(parsed.sessionId, parsed.eventId || undefined);
-            }
-          }
+          // if (url) {
+          //   const parsed = parseSpeedhiveUrl(url);
+          //   if (parsed.sessionId) {
+          //     console.log(`[WS Server] Auto-connecting Speedhive session: sessionId=${parsed.sessionId}, eventId=${parsed.eventId}`);
+          //     // Switch to live mode, reset manual riders and previous session results
+          //     raceState.isManualMode = false;
+          //     raceState.manualRiders = [];
+          //     raceState.manualSessionInfo = undefined;
+          //     raceState.results = null;
+          //     saveRaceStateCache();
+          //     await startOrReconnectSignalRSession(parsed.sessionId, parsed.eventId || undefined);//Proxy initial data
+          //   }
+          // }
         }
         else if (message.type === 'sessionControl') {
           console.log(`[WS Server] Received sessionControl: action=${message.action}`);
@@ -868,7 +878,7 @@ ${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
               }
             }
             if (targetSessionId) {
-              await startOrReconnectSignalRSession(targetSessionId, targetEventId);
+              await startOrReconnectSignalRSession(targetSessionId, targetEventId);//Proxy initial data
               saveRaceStateCache();
             } else {
               broadcastToAll({

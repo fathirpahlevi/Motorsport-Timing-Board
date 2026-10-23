@@ -89,6 +89,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
     rtmpConnectionRef.current = rtmpStatus;
   };
 
+  const [headerSel,setHeaderSel] = useState<number>(0);
   const [localVideoStatus, setLocalVideoStatus] = useState<string>('disconnected');
   const [localErrorMessage, setLocalErrorMessage] = useState<string>('');
 
@@ -149,7 +150,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
     >
       {/* Header Bar */}
       
-      {false && (
+      {headerSel === 0 && (
       <div className="ml-10 flex flex-row w-fit bgbiruYamaha h-[60px]">
         <div className="p-2 flex flex-row gap-3">
           <img className="h-[40px] w-fit mb-5" src={mainLogo}/>
@@ -180,11 +181,15 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
               {control.custom && (
                 <h1 className="text-3xl font-bold text-zinc-100 uppercase">{customBanner}</h1>
               )}
-              {(control.finish) && (
+              {(control.start) && (
+              // {(flag === 3 || control.finish) && (
+                <h1 className="text-3xl font-bold text-zinc-100 uppercase">Start</h1>
+              )}
+              {(control.finish && !control.start) && (
               // {(flag === 3 || control.finish) && (
                 <h1 className="text-3xl font-bold text-zinc-100 uppercase">Finish</h1>
               )}
-              {control.laps && flag !== 3 && !control.ltg && lapsToGo !==1 &&  (
+              {control.laps && flag !== 3 && !control.ltg  &&  (
                 <div className="h-min">
                   {(raceLaps > laps) ? (
                   <div className="text-2xl font-bold text-zinc-100 font-sans leading-none">
@@ -193,8 +198,6 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                     {raceLaps}
                   </div>) : (<div className="text-2xl font-bold text-zinc-100 font-sans leading-none">
                     Lap {laps}
-                    <span className="text-2xl text-zinc-400"> / </span>
-                    {(laps+lapsToGo)}
                   </div>)}
                   
                 </div>
@@ -218,8 +221,8 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
         )}
       </div>
     )}
-    {true &&(
-      <div className="mt-5 ml-8.5 flex flex-col bg-zinc-100 h-fit rounded-t-xl w-[206px]">
+    {headerSel === 1 &&(
+      <div className="mt-5 ml-8.5 flex flex-col bg-zinc-100 h-fit rounded-t-xl w-[206px] z-5">
         <motion.div 
         key="finish"
         initial={{ opacity: 0, y: -10 }}
@@ -306,7 +309,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
       {/* Main Positioning Display */}
     
     {true && (
-      <main className="flex-1 max-w-7xl w-full flex flex-col relative z-10 animate-fade-in overflow-hidden " id="main-content">
+      <main className="flex-1 max-w-7xl w-full flex flex-col relative z-40 animate-fade-in overflow-hidden " id="main-content">
         {/* Video Overlay Stream Viewport */}
         {control.video && (<p className='text-zinc-100/90 tracking-wider text-xl uppercase font-bold absolute left-85 top-2 z-40'>LIVE</p>)}
         <div className={`${control.video && control.rtmp && rtmpConnectionRef.current === 'playing' ? '' : 'hidden'} z-20 ml-8.5 w-[380px] bg-zinc-100 p-1 overflow-hidden font-sans`}>

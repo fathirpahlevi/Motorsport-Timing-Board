@@ -707,10 +707,12 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
                             </button>
                             {speedhiveUrl && (
                             <button
-                                onClick={() => {sendControlCommand('reset',true)}}
+                                onClick={() => {sendControlCommand('reset',true);
+                                    setSpeedhiveUrl('');
+                                }}
                                 className="px-3 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 text-xs font-bold uppercase tracking-wider rounded cursor-pointer"
                             >
-                                Reset
+                                Clear
                             </button>
                             )}
                         </div>
@@ -724,7 +726,7 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
                             className="flex-1 py-2 bg-zinc-900 hover:bg-zinc-950 text-rose-400 hover:text-rose-300 border border-rose-900/50 font-sans font-bold uppercase tracking-wider text-[11px] rounded transition-all cursor-pointer text-center disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
                             title="Shut off the active backend SignalR connection"
                             >
-                            🛑 Shutdown Session
+                            Shutdown
                             </button>
 
                             <button
@@ -733,7 +735,7 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
                             className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white font-sans font-bold uppercase tracking-wider text-[11px] rounded transition-all cursor-pointer text-center shadow-sm"
                             title="Reconnect SignalR connection and fetch fresh baseline data"
                             >
-                            🔄 Reconnect Session
+                            Reconnect
                             </button>
                         </div>
                     </div>
@@ -760,7 +762,7 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
                         </div>
                     </div>
                     
-                    <div className="space-y-4">
+                    {/* <div className="space-y-4">
                         <div className="flex flex-col gap-1.5">
                         <label className="text-[10px] text-zinc-500 uppercase font-black tracking-wider">Number of Race Laps</label>
                         <input
@@ -773,7 +775,7 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
                             className="border border-zinc-800 px-3 py-2 rounded text-xs text-zinc-500 font-mono focus:outline-none focus:border-red-600"
                         />
                         </div>
-                    </div>
+                    </div> */}
                     </div>
                 </div>
             </div>
@@ -785,16 +787,79 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
             Reset Display
             </button> */}
 
-            <div className="mt-6 p-4 bg-zinc-900 border border-zinc-800 rounded-xl space-y-3">
-                <span className="text-xs font-black uppercase tracking-wider text-amber-400 font-mono block">
+            <div className="mt-6 p-4 bg-zinc-300/10 border border-zinc-400 rounded-xl space-y-3">
+                <span className="text-xs uppercase tracking-wider text-zinc-950 font-extrabold block">
                     Broadcast Overlays & Controllers
                 </span>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
                     <a
                         href="/lowerthirdcontrol"
+                        target="_blank"
+                        rel="noreferrer"
                         className="p-2.5 bg-amber-400 text-zinc-950 font-bold rounded-lg text-center hover:bg-amber-300 transition-colors uppercase"
                     >
                         Lower Third Control
+                    </a>
+                    <a
+                        href="/weathercontrol"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-2.5 bg-cyan-400 text-zinc-950 font-bold rounded-lg text-center hover:bg-cyan-300 transition-colors uppercase"
+                    >
+                        Weather Control
+                    </a>
+                    <a
+                        href="/manual"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
+                    >
+                        Manual Control
+                    </a>
+                    <a
+                        href="/"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
+                    >
+                        Leaderboard Page
+                    </a>
+                </div>
+                 <span className="text-xs uppercase tracking-wider text-zinc-950 font-extrabold block">
+                    Overlay Pages
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+                    <a
+                        href="/sideposition"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
+                    >
+                        Side Position
+                    </a>
+                    <a
+                        href="/startinggrid"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
+                    >
+                        Starting Grid
+                    </a>
+                    <a
+                        href="/result"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
+                    >
+                        Result Page
+                    </a>
+                    <a
+                        href="/trophy"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
+                    >
+                        Awarding
                     </a>
                     <a
                         href="/lowerthird"
@@ -802,13 +867,7 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
                         rel="noreferrer"
                         className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
                     >
-                        Lower Third Overlay
-                    </a>
-                    <a
-                        href="/weathercontrol"
-                        className="p-2.5 bg-cyan-400 text-zinc-950 font-bold rounded-lg text-center hover:bg-cyan-300 transition-colors uppercase"
-                    >
-                        Weather Control
+                        Lower Third
                     </a>
                     <a
                         href="/weather"
@@ -816,21 +875,7 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
                         rel="noreferrer"
                         className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
                     >
-                        Weather Overlay
-                    </a>
-                    <a
-                        href="/manual"
-                        className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
-                    >
-                        Manual Grid Importer
-                    </a>
-                    <a
-                        href="/sideposition"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
-                    >
-                        Side Position Overlay
+                        Weather
                     </a>
                 </div>
             </div>

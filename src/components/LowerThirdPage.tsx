@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { RiderResult, LowerThirdState } from '../types';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface LowerThirdPageProps {
   riders: RiderResult[];
@@ -232,103 +233,197 @@ export const LowerThirdPage: React.FC<LowerThirdPageProps> = ({
       : 'flex flex-row gap-3 items-end justify-center';
   }, [effectivePosition, activeCount]);
 
-  if (!ltState.visible && renderedItems.length === 0) {
-    return null;
-  }
+  // if (!ltState.visible && renderedItems.length === 0) {
+  //   return null;
+  // }
+  // return (
+  //   <div
+  //     data-testid="lower-third-overlay"
+  //     className="fixed inset-0 pointer-events-none z-50 bg-transparent overflow-hidden"
+  //   >
+  //     {/* Lower Third Main Container */}
+  //     <div className={`absolute flex ${positionWrapperClass}`}>
+  //       <div className={flexCardsClass}>
+  //         {renderedItems.map(({ id, rider, status }) => {
+  //           // Layout fields
+  //           const posDisplay = rider.pos || String(rider.lbpos || 1);
+  //           const raceNumber = rider.dNo || rider.no || '-';
+  //           const fullName = rider.fNam || rider.nam || 'UNKNOWN RACER';
+  //           const teamName = rider.cb && rider.cb.trim() !== '' ? rider.cb : '-';
 
+  //           const isExiting = status === 'exiting';
+  //           const isEntering = status === 'entering';
+
+  //           return (
+  //             <div
+  //               key={id}
+  //               className={`transition-all duration-300 transform ${
+  //                 isExiting
+  //                   ? 'lt-card-exit'
+  //                   : isEntering
+  //                   ? 'lt-card-enter'
+  //                   : 'opacity-100 scale-100'
+  //               }`}
+  //             >
+  //               {/* 
+  //                 Square Container without rounded corners (rounded-none strictly).
+  //                 Two column layout:
+  //                   Col 1: Position, centered vertically
+  //                   Col 2: Divided into 2 rows:
+  //                     Row 1: Divided into 2 columns (full name, race number)
+  //                     Row 2: Only showing team name
+  //               */}
+  //               <div className="rounded-none overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.85)] flex flex-col w-[380px] bg-zinc-950/95 border-x border-b border-zinc-800 backdrop-blur-md">
+  //                 {/* Top animated border line */}
+  //                 <div
+  //                   className={`h-1.5 w-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 ${
+  //                     isExiting ? 'lt-border-exit' : 'lt-border-enter'
+  //                   }`}
+  //                 />
+
+  //                 {/* 2-Column Grid */}
+  //                 <div className="grid grid-cols-[68px_1fr] min-h-[64px]">
+  //                   {/* COLUMN 1: Position (Position number centered vertically) */}
+  //                   <div className="bg-amber-400 text-zinc-950 flex flex-col items-center justify-center font-black select-none border-r border-amber-500/80">
+  //                     <span className="text-[10px] tracking-widest uppercase font-mono font-bold leading-none opacity-80 mb-0.5">
+  //                       POS
+  //                     </span>
+  //                     <span className="text-2xl font-racing font-black leading-none">
+  //                       {posDisplay}
+  //                     </span>
+  //                   </div>
+
+  //                   {/* COLUMN 2: Divided into two rows */}
+  //                   <div className="flex flex-col justify-between bg-zinc-950 truncate">
+  //                     {/* ROW 1: Divided into two columns (Full name & Race number) */}
+  //                     <div className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-zinc-900 to-zinc-950 border-b border-zinc-850">
+  //                       {/* Row 1, Col 1: Full Name */}
+  //                       <div className="truncate pr-2">
+  //                         <span className="font-black uppercase text-white tracking-wider text-sm truncate block font-mono">
+  //                           {fullName}
+  //                         </span>
+  //                       </div>
+
+  //                       {/* Row 1, Col 2: Race Number */}
+  //                       <div className="shrink-0 flex items-center gap-1 pl-2 border-l border-zinc-800">
+  //                         <span className="text-[9px] font-mono text-zinc-400 font-bold uppercase">
+  //                           NO.
+  //                         </span>
+  //                         <span className="font-racing font-black text-amber-400 text-lg leading-none tracking-wider">
+  //                           {raceNumber}
+  //                         </span>
+  //                       </div>
+  //                     </div>
+
+  //                     {/* ROW 2: Only showing the team name */}
+  //                     <div className="px-3 py-1.5 bg-zinc-950 flex items-center">
+  //                       <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-300 truncate font-mono">
+  //                         {teamName}
+  //                       </span>
+  //                     </div>
+  //                   </div>
+  //                 </div>
+  //               </div>
+  //             </div>
+  //           );
+  //         })}
+  //       </div>
+  //     </div>
+  //   </div>
+  // );
   return (
     <div
       data-testid="lower-third-overlay"
       className="fixed inset-0 pointer-events-none z-50 bg-transparent overflow-hidden"
-    >
-      {/* Lower Third Main Container */}
-      <div className={`absolute flex ${positionWrapperClass}`}>
-        <div className={flexCardsClass}>
-          {renderedItems.map(({ id, rider, status }) => {
-            // Layout fields
-            const posDisplay = rider.pos || String(rider.lbpos || 1);
-            const raceNumber = rider.dNo || rider.no || '-';
-            const fullName = rider.fNam || rider.nam || 'UNKNOWN RACER';
-            const teamName = rider.cb && rider.cb.trim() !== '' ? rider.cb : '-';
+    ><AnimatePresence>
+        {/* Lower Third Main Container */}
+        {ltState.visible && (
+                  <motion.div
+                    key="weather-broadcast-square"
+                    initial={{ y: 380, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: 380, opacity: 0 }}
+                    transition={{ type: 'spring', damping: 28, stiffness: 240 }}
+                    className={`absolute flex ${positionWrapperClass}`}>
+            <div className={flexCardsClass}>
+              {renderedItems.map(({ id, rider, status }) => {
+                // Layout fields
+                const posDisplay = rider.pos || String(rider.lbpos || 1);
+                const raceNumber = rider.dNo || rider.no || '-';
+                const fullName = rider.fNam || rider.nam || 'UNKNOWN RACER';
+                const teamName = rider.cb && rider.cb.trim() !== '' ? rider.cb : '-';
 
-            const isExiting = status === 'exiting';
-            const isEntering = status === 'entering';
+                const isExiting = status === 'exiting';
+                const isEntering = status === 'entering';
 
-            return (
-              <div
-                key={id}
-                className={`transition-all duration-300 transform ${
-                  isExiting
-                    ? 'lt-card-exit'
-                    : isEntering
-                    ? 'lt-card-enter'
-                    : 'opacity-100 scale-100'
-                }`}
-              >
-                {/* 
-                  Square Container without rounded corners (rounded-none strictly).
-                  Two column layout:
-                    Col 1: Position, centered vertically
-                    Col 2: Divided into 2 rows:
-                      Row 1: Divided into 2 columns (full name, race number)
-                      Row 2: Only showing team name
-                */}
-                <div className="rounded-none overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.85)] flex flex-col w-[380px] bg-zinc-950/95 border-x border-b border-zinc-800 backdrop-blur-md">
-                  {/* Top animated border line */}
+                return (
                   <div
-                    className={`h-1.5 w-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 ${
-                      isExiting ? 'lt-border-exit' : 'lt-border-enter'
+                    key={id}
+                    className={`transition-all duration-300 transform ${
+                      isExiting
+                        ? 'lt-card-exit'
+                        : isEntering
+                        ? 'lt-card-enter'
+                        : 'opacity-100 scale-100'
                     }`}
-                  />
+                  >
+                    <div className="rounded-none overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.85)] flex flex-col w-[380px] bg-zinc-950/95 border-x border-b border-zinc-800 backdrop-blur-md">
+                      {/* Top animated border line */}
+                      <div
+                        className={`h-1.5 w-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 ${
+                          isExiting ? 'lt-border-exit' : 'lt-border-enter'
+                        }`}
+                      />
 
-                  {/* 2-Column Grid */}
-                  <div className="grid grid-cols-[68px_1fr] min-h-[64px]">
-                    {/* COLUMN 1: Position (Position number centered vertically) */}
-                    <div className="bg-amber-400 text-zinc-950 flex flex-col items-center justify-center font-black select-none border-r border-amber-500/80">
-                      <span className="text-[10px] tracking-widest uppercase font-mono font-bold leading-none opacity-80 mb-0.5">
-                        POS
-                      </span>
-                      <span className="text-2xl font-racing font-black leading-none">
-                        {posDisplay}
-                      </span>
-                    </div>
-
-                    {/* COLUMN 2: Divided into two rows */}
-                    <div className="flex flex-col justify-between bg-zinc-950 truncate">
-                      {/* ROW 1: Divided into two columns (Full name & Race number) */}
-                      <div className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-zinc-900 to-zinc-950 border-b border-zinc-850">
-                        {/* Row 1, Col 1: Full Name */}
-                        <div className="truncate pr-2">
-                          <span className="font-black uppercase text-white tracking-wider text-sm truncate block font-mono">
-                            {fullName}
+                      {/* 2-Column Grid */}
+                      <div className="grid grid-cols-[68px_1fr] min-h-[64px]">
+                        {/* COLUMN 1: Position (Position number centered vertically) */}
+                        <div className="bg-amber-400 text-zinc-950 flex flex-col items-center justify-center font-black select-none border-r border-amber-500/80">
+                          <span className="text-[10px] tracking-widest uppercase font-mono font-bold leading-none opacity-80 mb-0.5">
+                            POS
+                          </span>
+                          <span className="text-2xl font-racing font-black leading-none">
+                            {posDisplay}
                           </span>
                         </div>
 
-                        {/* Row 1, Col 2: Race Number */}
-                        <div className="shrink-0 flex items-center gap-1 pl-2 border-l border-zinc-800">
-                          <span className="text-[9px] font-mono text-zinc-400 font-bold uppercase">
-                            NO.
-                          </span>
-                          <span className="font-racing font-black text-amber-400 text-lg leading-none tracking-wider">
-                            {raceNumber}
-                          </span>
-                        </div>
-                      </div>
+                        {/* COLUMN 2: Divided into two rows */}
+                        <div className="flex flex-col justify-between bg-zinc-950 truncate">
+                          {/* ROW 1: Divided into two columns (Full name & Race number) */}
+                          <div className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-zinc-900 to-zinc-950 border-b border-zinc-850">
+                            {/* Row 1, Col 1: Full Name */}
+                            <div className="truncate pr-2">
+                              <span className="font-black uppercase text-white tracking-wider text-sm truncate block font-mono">
+                                {fullName}
+                              </span>
+                            </div>
 
-                      {/* ROW 2: Only showing the team name */}
-                      <div className="px-3 py-1.5 bg-zinc-950 flex items-center">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-300 truncate font-mono">
-                          {teamName}
-                        </span>
+                            {/* Row 1, Col 2: Race Number */}
+                            <div className="shrink-0 flex items-center gap-1 pl-2 border-l border-zinc-800">
+                              <span className="text-[9px] font-mono text-zinc-400 font-bold uppercase">
+                                NO.
+                              </span>
+                              <span className="font-racing font-black text-amber-400 text-lg leading-none tracking-wider">
+                                {raceNumber}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* ROW 2: Only showing the team name */}
+                          <div className="px-3 py-1.5 bg-zinc-950 flex items-center">
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-300 truncate font-mono">
+                              {teamName}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+                );
+              })}
+            </div>
+        </motion.div>)}
+      </AnimatePresence>
     </div>
   );
 };

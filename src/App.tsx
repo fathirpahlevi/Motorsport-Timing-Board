@@ -185,6 +185,7 @@ export default function App() {
   const [savedEventId, setEventId] = useState<string>('');
   const sessionIdRef = useRef(savedSessionId);
   const initialLoadRef = useRef(true);
+  const handlingNewSession = useRef(false);
 
   useEffect(() => {
       flagRef.current = flag;
@@ -198,8 +199,7 @@ export default function App() {
 
       }
       sessionIdRef.current = savedSessionId;
-      // if(!savedSessionId){ 
-        // console.log("Trying to fetch initial data for new sessionId");
+      if(!handlingNewSession.current){
         initialLoadRef.current = false;
         async function fetchData() {
           try {
@@ -216,7 +216,7 @@ export default function App() {
           }
         }
         fetchData();
-
+      }
   }, [savedSessionId]);
 
   useEffect(() =>{
@@ -280,6 +280,7 @@ export default function App() {
   useEffect(() => {
     isManualModeRef.current = isManualMode;
   }, [isManualMode]);
+  
 
   const applyManualOverridesToRider = (rider: RiderResult): RiderResult => {
     const overrides = manualOverridesRef.current;
@@ -322,6 +323,11 @@ export default function App() {
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'setting up' | 'waiting' | 'error'>('disconnected');
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const connectionRef = useRef<WebSocket | null>(null);
+
+  
+  useEffect(() => {
+    console.log(connectionStatus);
+  }, [connectionStatus]);
 
   // Simulation Controls (Moved entirely into the collapsible Setup Drawer)
   const [autoSimulate, setAutoSimulate] = useState<boolean>(false);
@@ -494,7 +500,7 @@ export default function App() {
       addWebSocketLog('system', "❌ SignalR Error: results is not a valid array");
       return;
     }
-    // console.log("RAW Packet", packetObj);
+    console.log("RAW Packet", packetObj);
     setRiders((prevRiders) => {
       const riderMap = new Map<string, RiderResult>();
       prevRiders.forEach((r) => {
@@ -704,6 +710,7 @@ export default function App() {
         setSessionBestRider(bestRider.nam);
       }
       addWebSocketLog('system', `📊 Received ${finalInitialData.length} starter grid positions from Speedhive API.`);
+      handlingNewSession.current = false;
     }
       return { eventId: data.eventId, sessionId: data.sessionId };
     } catch (err: any) {
@@ -765,18 +772,20 @@ export default function App() {
           socket.send(JSON.stringify({
             type: "subscribe",
             sessionId: sessionId,
-            newSessionId: sessionId
+            newSessionId: sessionId,
+            page: location.pathname
           }));
         }else{
           addWebSocketLog('system', `🟢 Connected to backend proxy. No sessionId provided, waiting for new connection.`);
           socket.send(JSON.stringify({
             type: "subscribe",
-            sessionId: ""
+            sessionId: "",
+            page: location.pathname
           }));
         }
 
         // Request full state synchronization from authoritative server
-        socket.send(JSON.stringify({ type: "syncState" }));
+        socket.send(JSON.stringify({ type: "syncState",page: location.pathname }));
       };
 
       socket.onmessage = (event) => {
@@ -865,7 +874,8 @@ export default function App() {
                 socket.send(JSON.stringify({
                   type: "syncState",
                   sessionId: sessionId,
-                  newSessionId: sessionId
+                  newSessionId: sessionId,
+                  page: location.pathname
                 }));
             if(location.pathname === "/sideposition" || location.pathname === "/sideposition/"){
               console.log("Sending to control");
@@ -1274,6 +1284,7 @@ export default function App() {
         await fetchInitialData(`${parts[0]}-${parts[1]}`, sessionId);
       }
     }
+    handlingNewSession.current = true;
     setSessionId(sessionId);
 
     // 2. Spawn WebSockets

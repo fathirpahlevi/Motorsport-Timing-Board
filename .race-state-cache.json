@@ -1,43 +1,279 @@
 {
   "savedID": {
-    "eventId": "KGMIPWTO-2147485021",
-    "sessionId": "KGMIPWTO-2147485021-1073744746"
+    "eventId": "UMKSNDLQ-2147485264",
+    "sessionId": "UMKSNDLQ-2147485264-1073745597"
   },
-  "speedhiveUrl": "https://speedhive.mylaps.com/livetiming/INXORSRO-2147484759/sessions/INXORSRO-2147484759-1073746291",
+  "speedhiveUrl": "https://speedhive.mylaps.com/livetiming/UMKSNDLQ-2147485264/sessions/UMKSNDLQ-2147485264-1073745597",
   "isManualMode": false,
   "manualRiders": [],
+  "manualOverrides": {},
   "lowerThird": {
     "visible": false,
-    "position": "center",
-    "selectedRiderIds": [
-      "134"
-    ]
+    "position": "left",
+    "selectedRiderIds": []
+  },
+  "weather": {
+    "visible": false,
+    "mode": "simple",
+    "regionName": "Cigugur",
+    "regionAdmin": "Jawa Barat",
+    "latitude": -6.9675527,
+    "longitude": 108.4777732,
+    "weatherData": {
+      "latitude": -6.994727,
+      "longitude": 108.45569,
+      "generationtime_ms": 0.25,
+      "utc_offset_seconds": 25200,
+      "timezone": "Asia/Jakarta",
+      "timezone_abbreviation": "GMT+7",
+      "elevation": 614,
+      "current_units": {
+        "time": "iso8601",
+        "interval": "seconds",
+        "temperature_2m": "°C",
+        "relative_humidity_2m": "%",
+        "apparent_temperature": "°C",
+        "is_day": "",
+        "precipitation": "mm",
+        "rain": "mm",
+        "showers": "mm",
+        "weather_code": "wmo code",
+        "cloud_cover": "%",
+        "wind_speed_10m": "km/h",
+        "wind_direction_10m": "°"
+      },
+      "current": {
+        "time": "2026-10-21T12:00",
+        "interval": 900,
+        "temperature_2m": 24.5,
+        "relative_humidity_2m": 82,
+        "apparent_temperature": 25.8,
+        "is_day": 1,
+        "precipitation": 0,
+        "rain": 0,
+        "showers": 0,
+        "weather_code": 2,
+        "cloud_cover": 35,
+        "wind_speed_10m": 11.2,
+        "wind_direction_10m": 240
+      },
+      "hourly_units": {
+        "time": "iso8601",
+        "temperature_2m": "°C",
+        "relative_humidity_2m": "%",
+        "precipitation_probability": "%",
+        "precipitation": "mm",
+        "weather_code": "wmo code"
+      },
+      "hourly": {
+        "time": [
+          "2026-10-21T00:00",
+          "2026-10-21T01:00",
+          "2026-10-21T02:00",
+          "2026-10-21T03:00",
+          "2026-10-21T04:00",
+          "2026-10-21T05:00",
+          "2026-10-21T06:00",
+          "2026-10-21T07:00",
+          "2026-10-21T08:00",
+          "2026-10-21T09:00",
+          "2026-10-21T10:00",
+          "2026-10-21T11:00",
+          "2026-10-21T12:00",
+          "2026-10-21T13:00",
+          "2026-10-21T14:00",
+          "2026-10-21T15:00",
+          "2026-10-21T16:00",
+          "2026-10-21T17:00",
+          "2026-10-21T18:00",
+          "2026-10-21T19:00",
+          "2026-10-21T20:00",
+          "2026-10-21T21:00",
+          "2026-10-21T22:00",
+          "2026-10-21T23:00"
+        ],
+        "temperature_2m": [
+          21.1,
+          21,
+          20.9,
+          20.8,
+          20.7,
+          20.6,
+          21.1,
+          22.6,
+          23.2,
+          24.7,
+          26,
+          27.2,
+          27.8,
+          29.1,
+          28.7,
+          26.5,
+          26.1,
+          24.9,
+          23.4,
+          22.2,
+          21.4,
+          21.2,
+          21.2,
+          21.2
+        ],
+        "relative_humidity_2m": [
+          95,
+          95,
+          95,
+          94,
+          94,
+          96,
+          95,
+          90,
+          88,
+          81,
+          74,
+          69,
+          66,
+          56,
+          56,
+          71,
+          73,
+          77,
+          86,
+          94,
+          97,
+          94,
+          91,
+          90
+        ],
+        "precipitation_probability": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          6,
+          14,
+          25,
+          40,
+          57,
+          71,
+          83,
+          93,
+          90,
+          65,
+          29,
+          2,
+          0,
+          0,
+          0,
+          0
+        ],
+        "precipitation": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0.1,
+          0.2,
+          0.3,
+          0.1,
+          0.1,
+          0.1,
+          0.2,
+          0.6,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "weather_code": [
+          45,
+          45,
+          3,
+          3,
+          2,
+          45,
+          45,
+          45,
+          51,
+          51,
+          51,
+          51,
+          51,
+          51,
+          51,
+          53,
+          1,
+          1,
+          2,
+          3,
+          45,
+          45,
+          1,
+          1
+        ]
+      },
+      "daily_units": {
+        "time": "iso8601",
+        "weather_code": "wmo code",
+        "temperature_2m_max": "°C",
+        "temperature_2m_min": "°C",
+        "precipitation_sum": "mm",
+        "precipitation_probability_max": "%",
+        "sunrise": "iso8601",
+        "sunset": "iso8601"
+      },
+      "daily": {
+        "time": [
+          "2026-10-21"
+        ],
+        "weather_code": [
+          2
+        ],
+        "temperature_2m_max": [
+          29.1
+        ],
+        "temperature_2m_min": [
+          20.6
+        ],
+        "precipitation_sum": [
+          1.7
+        ],
+        "precipitation_probability_max": [
+          93
+        ],
+        "sunrise": [
+          "2026-10-21T05:22"
+        ],
+        "sunset": [
+          "2026-10-21T17:39"
+        ]
+      }
+    },
+    "lastUpdated": "11.16.07"
   },
   "sessionInfo": {
-    "eNam": "MCLAREN F1",
-    "rnNam": "Afternoon",
-    "gNam": "17/10",
-    "btLpTim": "1:45.172",
-    "ls": 11,
+    "eNam": "Personal VM",
+    "rnNam": "Race",
+    "gNam": "C30",
+    "btLpTim": "1:32.774",
+    "ls": 23,
     "lsTg": 0,
-    "f": 0
+    "f": 3
   },
   "controlAction": {
     "position": true,
-    "sidePositionPage": 0,
-    "ltg": false,
-    "finish": false,
-    "start": false,
     "timingVisible": true,
-    "time": true,
-    "timingMode": "lapCount",
-    "lastLap": true,
-    "diff": false,
-    "gap": true,
-    "best": true,
-    "racerLap": true,
-    "rtmp": true,
-    "input": false,
-    "laps": true
+    "time": true
   }
 }
