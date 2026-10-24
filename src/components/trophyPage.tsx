@@ -44,7 +44,7 @@ export const TrophyPage: React.FC<RaceResultPageProps> = ({
     name: string;
     team: string;
     number: string | number;
-    totalTime: string;
+    time: string;
     isFinished: boolean;
   }> = [];
 
@@ -65,7 +65,7 @@ export const TrophyPage: React.FC<RaceResultPageProps> = ({
       name: r.nam || '-',
       team: r.cb || '-',
       number: r.no || '-',
-      totalTime: r.tTm || r.gp || r.lsTm || '--:--.---',
+      time: true ? r.tTm : r.btTm  || '--:--.---', //|| r.gp || r.lsTm, r.btTm || r.tTm, r.btTm || r.tTm
       isFinished: true,
     }));
   } else if (resolvedData?.racers && resolvedData.racers.length > 0) {
@@ -79,7 +79,7 @@ export const TrophyPage: React.FC<RaceResultPageProps> = ({
         name: r.riderName || '-',
         team: r.teamGroup || '-',
         number: r.riderNo || '-',
-        totalTime: r.totalTime || '--:--.---',
+        time: true ? r.totalTime : r.bestLapTime || '--:--.---', //r.totalTime || r.bestLapTime, r.bestLapTime || r.totalTime
         isFinished: true,
       })
     );
@@ -99,7 +99,7 @@ export const TrophyPage: React.FC<RaceResultPageProps> = ({
               </div>
               <div className="w-fit h-fit ml-auto flex flex-col justify-center items-end ">
                 <img className="h-[120px] w-fit mb-5" src={mainLogo}/>
-                <div className="bg-blue-800/70 h-auto w-40 flex justify-center items-end text-zinc-100 font-bold text-2xl">{finishedRacers[3] ? finishedRacers[3].totalTime :'--:--'}</div>
+                <div className="bg-blue-800/70 h-auto w-40 flex justify-center items-end text-zinc-100 font-bold text-2xl">{finishedRacers[3] ? finishedRacers[3].time :'--:--'}</div>
               </div>
             </div>
             <div className="w-100 flex flex-col">
@@ -121,7 +121,7 @@ export const TrophyPage: React.FC<RaceResultPageProps> = ({
               <div className="w-fit h-fit ml-auto relative flex flex-col justify-center items-end ">
                 <img className='h-[166px] z-1 w-fit absolute -left-34 bottom-13' src={silverMedal}/>
                 <img className="h-[120px] z-2 w-fit mb-5" src={mainLogo}/>
-                <div className="bg-blue-800/70 h-auto w-40 flex justify-center items-end text-zinc-100 font-bold text-2xl">{finishedRacers[1] ? finishedRacers[1].totalTime : '--:--'}</div>
+                <div className="bg-blue-800/70 h-auto w-40 flex justify-center items-end text-zinc-100 font-bold text-2xl">{finishedRacers[1] ? finishedRacers[1].time : '--:--'}</div>
               </div>
             </div>
             <div className="w-100 flex flex-col">
@@ -143,7 +143,7 @@ export const TrophyPage: React.FC<RaceResultPageProps> = ({
               <div className="w-fit h-fit ml-auto relative flex flex-col justify-center items-end ">
                 <img className='h-[166px] z-1 w-fit absolute -left-27 bottom-15' src={goldMedal}/>
                 <img className="h-[120px] z-2 w-fit mb-5" src={mainLogo}/>
-                <div className="bg-blue-800/70 h-auto w-40 flex justify-center items-end text-zinc-100 font-bold text-2xl">{finishedRacers[0] ? finishedRacers[0].totalTime : '--:--'}</div>
+                <div className="bg-blue-800/70 h-auto w-40 flex justify-center items-end text-zinc-100 font-bold text-2xl">{finishedRacers[0] ? finishedRacers[0].time : '--:--'}</div>
               </div>
             </div>
             <div className="w-100 flex flex-col">
@@ -165,7 +165,7 @@ export const TrophyPage: React.FC<RaceResultPageProps> = ({
               <div className="w-fit h-fit ml-auto relative flex flex-col justify-center items-end ">
                 <img className='h-[166px] z-1 w-fit absolute -left-27 bottom-15' src={bronzeMedal}/>
                 <img className="h-[120px] z-2 w-fit mb-5" src={mainLogo}/>
-                <div className="bg-blue-800/70 h-auto w-40 flex justify-center items-end text-zinc-100 font-bold text-2xl">{finishedRacers[2] ? finishedRacers[2].totalTime : '--:--'}</div>
+                <div className="bg-blue-800/70 h-auto w-40 flex justify-center items-end text-zinc-100 font-bold text-2xl">{finishedRacers[2] ? finishedRacers[2].time : '--:--'}</div>
               </div>
             </div>
             <div className="w-100 flex flex-col">
@@ -187,7 +187,7 @@ export const TrophyPage: React.FC<RaceResultPageProps> = ({
               </div>
               <div className="w-fit h-fit ml-auto relative flex flex-col justify-center items-end ">
                 <img className="h-[120px] z-2 w-fit mb-5" src={mainLogo}/>
-                <div className="bg-blue-800/70 h-auto w-40 flex justify-center items-end text-zinc-100 font-bold text-2xl">{finishedRacers[4] ? finishedRacers[4].totalTime : '--:--'}</div>
+                <div className="bg-blue-800/70 h-auto w-40 flex justify-center items-end text-zinc-100 font-bold text-2xl">{finishedRacers[4] ? finishedRacers[4].time : '--:--'}</div>
               </div>
             </div>
             <div className="w-100 flex flex-col">

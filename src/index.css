@@ -150,7 +150,7 @@
   }
 
   .lt-border-enter {
-    animation: lt-top-border-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: lt-top-border-in 0.25 cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
 
   .lt-card-enter {
@@ -160,10 +160,10 @@
 
   .lt-card-exit {
     transform-origin: top;
-    animation: lt-card-fold-up 0.3s cubic-bezier(0.7, 0, 0.84, 0) forwards;
+    animation: lt-card-fold-up 0.4s cubic-bezier(0.7, 0, 0.84, 0) forwards;
   }
 
   .lt-border-exit {
-    animation: lt-top-border-out 0.2s cubic-bezier(0.7, 0, 0.84, 0) 0.15s forwards;
+    animation: lt-top-border-out 0.3s cubic-bezier(0.7, 0, 0.84, 0) 0.15s forwards;
   }
 }

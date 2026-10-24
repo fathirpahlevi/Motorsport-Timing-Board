@@ -60,7 +60,7 @@ export interface RiderResult {
   cl: string;      // Class (e.g. "GCIC兴联杯Xinglian CUP")
   cln: string;     // Class Name
   nam: string;     // Rider Name
-  fNam: string;    // Full Rider Name
+  fNam?: string;    // Full Rider Name
   no: string;      // Rider vehicle number (e.g. "09")
   dNo: string;     // Display number
   lbpos: number;   // Leaderboard Position integer
@@ -71,7 +71,11 @@ export interface RiderResult {
   asp?: number;    // Speed / Gap parameter
   if?: boolean;    // Finished flag
   s0?: string;     // Sector 0
+  s1?: string;     // Sector 1
+  s2?: string;     // Sector 2
   cb?: string;     // Club/Team name (e.g. "兴联车队 XINGLIAN")
+  nat?: string;
+  mk?: string;
   status?: RacerStatus; // 11 Racer States (RUN, PIT, IN, OUT, FIN, DNF, DNS, DSQ, DNQ, Ret, NC)
   
   // Custom states added for UI reactivity (or injected by simulator)

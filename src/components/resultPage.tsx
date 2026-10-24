@@ -58,7 +58,7 @@ export const RaceResultPage: React.FC<RaceResultPageProps> = ({
       team: r.cb || '-',
       number: r.no || '-',
       status: r.status,
-      totalTime: r.tTm || r.lsTm || '--:--.---',
+      totalTime: r.tTm || '--:--.---',
       isFinished: true,
       btTm: r.btTm || '--:--.---',
     }));
@@ -192,10 +192,15 @@ export const RaceResultPage: React.FC<RaceResultPageProps> = ({
 
                       {/* Column 4: Total Time */}
                       <td className="py-1 px-4 text-right">
-                        <span className="font-mono text-base sm:text-lg font-extrabold text-black print:text-black">
+                        {true ? (
+                          <span className="font-mono text-base sm:text-lg font-extrabold text-black print:text-black">
                           {racer.totalTime}
-                          {/* {racer.btTm} */}
                         </span>
+                        ) : (
+                          <span className="font-mono text-base sm:text-lg font-extrabold text-black print:text-black">
+                          {racer.btTm}
+                        </span>)}
+                        
                       </td>
                     </tr>
                   );

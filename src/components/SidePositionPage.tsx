@@ -40,16 +40,7 @@ function formatRaceTimer(seconds: number = 0): string {
 }
 
 // Helper to truncate/fit long driver names
-function fitName(name: string, maxLength: number) {
-  if (!name) return {first:'',last:'-'};;
-  const parts = name.split(' ');
-  if (name.length <= maxLength) return {first:'',last:name};
-  if(parts.length === 1){
-    if(name.length <= maxLength)return {first:'',last:name};
-    return {first:'',last:name.slice(0, 3)};
-  }
-  return {first:parts[0][0],last:parts[1].slice(0, 3)};
-}
+
 
 export const SidePositionPage: React.FC<SidePositionPageProps> = ({
   riders,
@@ -90,8 +81,14 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
   };
 
   const [headerSel,setHeaderSel] = useState<number>(0);
+  const [towerSel,setTowerSel] = useState<number>(0);
   const [localVideoStatus, setLocalVideoStatus] = useState<string>('disconnected');
   const [localErrorMessage, setLocalErrorMessage] = useState<string>('');
+
+  const [isTimingVisibleDelay, setIsTimingVisibleDelay] = useState<boolean>(false);
+  const timingModeRef = useRef<string>('');
+  
+  const onTimeout1 = useRef<boolean>(false);
 
   const activeVideoStatus = parentVideoStatus || localVideoStatus;
   const activeErrorMessage = parentErrorMessage || localErrorMessage;
@@ -134,7 +131,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
   if (strVal.startsWith('+') || strVal.toLowerCase().includes('lap')) {
     return strVal;
   }
-
+  
   // Append '+' for positive numeric deltas
   const numericVal = parseFloat(strVal);
   if (!isNaN(numericVal) && numericVal > 0) {
@@ -322,234 +319,745 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
         </div>
 
         {/* Leaderboard Section */}
-        <section className={`w-full flex flex-col ${control.position ? '' :'-translate-y-[120%] transition-transform duration-1000 ease-out'}`} id="leaderboard-section">
-          <div className="w-full relative" id="riders-reordering-list">
-            <AnimatePresence initial={false}>
-              {(() => {
-                const activePageIndex = typeof control.sidePositionPage === 'number' ? control.sidePositionPage : 0;
-                const paged = getPagedRiders(riders, activePageIndex);
-                const displayedRiders = paged.displayedRiders;
-
-                if (displayedRiders.length === 0) {
-                  return (
-                    <div className="text-zinc-100 flex flex-col gap-4 animate-fade-in animate-pulse">-</div>
-                  );
-                }
-
-                return displayedRiders.map((rider, index) => {
-                  const showUI = { gap: false, gapTime: 0, diff: false };
-                  if (typeof rider.df === 'number') {
-                    if (rider.df >= 4 && rider.df < 5) {
-                      showUI.diff = true;
-                    }
-                  }
-                  const isLeader = index === 0;
-                  const isDnf = isRiderDnf(rider);
-
-                  // Highlight flashes on position swap
-                  const isRecentlyChanged = rider.changeTime && Date.now() - rider.changeTime < 1300;
-                  const flashClass = !isDnf && isRecentlyChanged
-                    ? rider.changeDirection === 'up'
-                      ? 'border-x-4 pointer border-l-emerald-600 border-r-emerald-600'
-                      : rider.changeDirection === 'down'
-                      ? 'border-x-4 pointer border-l-red-500 border-r-red-500'
-                      : ''
-                    : '';
-
-                  const activeTimingMode: 'lapCount' | 'lastLap' | 'gap' | 'interval' | 'bestTime' = 
-                    (control.timingMode as any) || (control.best ? 'bestTime' : control.racerLap ? 'lapCount' : control.lastLap ? 'lastLap' : control.diff ? 'interval' : control.gap ? 'gap' : 'gap');
-
-                  const isTimingVisible = control.timingVisible !== undefined ? !!control.timingVisible : !!control.time;
-
-                  let shouldShowForThisRider = isTimingVisible;
-                  let timingContent: React.ReactNode = null;
-
-                  if (activeTimingMode === 'lapCount') {
-                    timingContent = (
-                      <div className="h-full font-mono text-xl text-black tracking-tight leading-none flex items-center justify-end gap-1">
-                        <span className="font-sans text-[11px] font-bold text-zinc-500 uppercase mr-0.5">LAP</span>
-                        <span>{rider.ls !== undefined && rider.ls !== null ? rider.ls : '-'}</span>
-                      </div>
-                    );
-                  } else if (activeTimingMode === 'lastLap') {
-                    timingContent = (
-                      <div className="h-full font-mono text-base font-bold text-black tracking-tight leading-none flex items-center justify-end gap-1">
-                        <span className="font-sans text-[10px] font-bold text-zinc-500 uppercase mr-0.5">LAST</span>
-                        <span>{rider.lsTm || '-'}</span>
-                      </div>
-                    );
-                  } else if (activeTimingMode === 'gap') {
-                    timingContent = (
-                      <div className="h-full font-mono text-xl text-black tracking-tight leading-none flex items-center justify-end">
-                        {isDnf ? '-' : (isLeader ? (
-                          <span className="font-sans text-sm font-black tracking-wider uppercase text-black">GAP</span>
-                        ) : (
-                          formatDeltaTime(rider.gp, isLeader)
-                        ))}
-                      </div>
-                    );
-                  } else if (activeTimingMode === 'interval') {
-                    timingContent = (
-                      <div className="h-full font-mono text-xl text-black tracking-tight leading-none flex items-center justify-end">
-                        {isDnf ? '-' : (isLeader ? (
-                          <span className="font-sans text-xs font-black tracking-wider uppercase text-black">INTERVAL</span>
-                        ) : (
-                          formatDeltaTime(rider.df, isLeader)
-                        ))}
-                      </div>
-                    );
-                  } else if (activeTimingMode === 'bestTime') {
-                    // Only show best time for the single current fastest racer (where rider.ibt === true)
-                    if (rider.ibt && rider.btTm && !isDnf) {
-                      timingContent = (
-                        <div className="h-full flex items-center justify-end gap-1 text-black leading-none">
-                          <span className="font-sans text-[10px] font-black text-amber-700 uppercase tracking-wider mr-0.5">BEST</span>
-                          <span className="font-mono text-base font-black tracking-tight">{rider.btTm}</span>
-                        </div>
+        <AnimatePresence>
+          {control.position && (
+          <motion.div
+            initial={{ opacity: 0, x: -410 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -410 }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
+            className="h-full flex items-center justify-end"
+          >
+            <section className={`w-full flex flex-col ${control.position ? '' :'-translate-y-[120%] transition-transform duration-1000 ease-out'}`} id="leaderboard-section">
+              <div className="w-[400px] relative" id="riders-reordering-list">
+                <AnimatePresence initial={false}>
+                  {(() => {
+                    const activePageIndex = typeof control.sidePositionPage === 'number' ? control.sidePositionPage : 0;
+                    const paged = getPagedRiders(riders, activePageIndex);
+                    const displayedRiders = paged.displayedRiders;
+                    if (displayedRiders.length === 0) {
+                      return (
+                        <div className="text-zinc-100 flex flex-col gap-4 animate-fade-in animate-pulse">-</div>
                       );
-                    } else {
-                      shouldShowForThisRider = false;
                     }
-                  }
 
-                  return (
-                    <motion.div
-                      layoutId={`rider-row-${rider.id}`}
-                      key={rider.id}
-                      className={`my-0 w-full flex items-center flex-row border-transparent relative`}
-                      id={`rider-row-${rider.id}`}
-                      onClick={() => {
-                        if (setSelectedRiderId) {
-                          setSelectedRiderId(rider.id === selectedRiderId ? null : rider.id);
+                    return displayedRiders.map((rider, index) => {
+                      const showUI = { gap: false, gapTime: 0, diff: false };
+                      if (typeof rider.df === 'number') {
+                        if (rider.df >= 4 && rider.df < 5) {
+                          showUI.diff = true;
                         }
-                        if (setIsSetupOpen) {
-                          setIsSetupOpen(true);
-                        }
-                      }}
-                    >
-                      <div className={`flex items-center grid-cols-7 w-[240px] h-full grid border-transparent relative z-20 shadow-xs`}>
-                        {/* FINISHED FLAG / STATUS 2-5 TEXT BADGE */}
-                        <div className="top-0 h-[30px] flex items-center justify-center"> 
-                          {(() => {
-                            const status = rider.status;
-                            const isState2to5 = status && ['PIT', 'IN', 'OUT', 'FIN'].includes(status);
-                            if (isState2to5) {
-                              return (
-                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-tight shadow-sm font-mono ${
-                                  status === 'FIN'
-                                    ? 'bg-emerald-600 text-white'
-                                    : status === 'PIT'
-                                    ? 'bg-amber-500 text-black'
-                                    : status === 'IN'
-                                    ? 'bg-orange-600 text-white'
-                                    : 'bg-yellow-400 text-black'
-                                }`}>
-                                  {status}
-                                </span>
-                              );
-                            }
-                            // Standard RUN state: show checkered flag if finished (rider.if)
-                            if (rider.if && !isDnf && (!rider.changeDirection || rider.changeDirection === 'steady')) {
-                              return (
-                                <img
-                                  src={finishFlagUrl}
-                                  alt="Finish flag"
-                                  className="h-[40px] drop-shadow-2xl col-span-1 z-20 pointer-events-none"
-                                />
-                              );
-                            }
-                            return null;
-                          })()}
-                        </div>
+                      }
+                      const isLeader = index === 0;
+                      const isDnf = isRiderDnf(rider);
+                      
+                      const rawPos = typeof rider.pos === 'string' 
+                        ? rider.pos.trim() 
+                        : (rider.lbpos ? String(rider.lbpos) : String(index + 1));
 
-                        {/* POSITION & ARROW / STATUS 5-11 */}
-                        <div className={`col-span-1 border-transparent flex items-center justify-center h-full bg-zinc-100 ${flashClass}`}>
-                          {(() => {
-                            const status = rider.status;
-                            const isState5to11 = status && ['FIN', 'DNF', 'DNS', 'DSQ', 'DNQ', 'Ret', 'NC'].includes(status);
-                            const rawPos = typeof rider.pos === 'string' ? rider.pos.trim() : (rider.lbpos ? String(rider.lbpos) : String(index + 1));
-                            const isDnfOrTerminal = isDnf || isState5to11 || rawPos === 'DNF' || isNaN(Number(rawPos));
+                      // Highlight flashes on position swap
+                      const isRecentlyChanged = rider.changeTime && Date.now() - rider.changeTime < 1300;
+                      const flashClass = !isDnf && isRecentlyChanged
+                        ? rider.changeDirection === 'up'
+                          ? 'border-x-2 pointer border-l-emerald-600 border-r-emerald-600'
+                          : rider.changeDirection === 'down'
+                          ? 'border-x-2 pointer border-l-red-500 border-r-red-500'
+                          : ''
+                        : '';
 
-                            if (isDnfOrTerminal) {
-                              const displayText = isState5to11 ? status : (rawPos || 'DNF');
-                              return (
-                                <span
-                                  className="text-rose-600 text-xs font-black tracking-tight uppercase"
-                                  id={`rider-pos-${rider.id}`}
-                                >
-                                  {displayText}
-                                </span>
-                              );
-                            }
+                      const activeTimingMode: 'lapCount' | 'lastLap' | 'gap' | 'interval' | 'bestTime' = 
+                        (control.timingMode as any) || (control.best ? 'bestTime' : control.racerLap ? 'lapCount' : control.lastLap ? 'lastLap' : control.diff ? 'interval' : control.gap ? 'gap' : 'gap');
 
-                            return (
-                              <div>
-                                {rider.changeDirection === 'up' && (
-                                  <ChevronUp className="w-7 h-7 text-emerald-600" />
-                                )}
-                                {rider.changeDirection === 'down' && (
-                                  <ChevronDown className="w-7 h-7 text-red-500" />
-                                )}
-                                {(!rider.changeDirection ||
-                                  (rider.changeDirection !== 'up' && rider.changeDirection !== 'down')) && (
-                                  <span
-                                    className="text-black text-xl font-bold"
-                                    id={`rider-pos-${rider.id}`}
-                                  >
-                                    {rawPos}
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })()}
-                        </div>
+                      
+                      let isTimingVisible = control.timingVisible !== undefined ? !!control.timingVisible : !!control.time;
+                      
+                      if(isTimingVisible && activeTimingMode !== timingModeRef.current){
+                        setIsTimingVisibleDelay(false);
+                        onTimeout1.current = true;
+                        setTimeout(() => {
+                          setIsTimingVisibleDelay(true);
+                          onTimeout1.current = false;
+                        }, 700);
+                      }
+                      timingModeRef.current = activeTimingMode;
 
-                        {/* RIDER NAME / TEAM */}
-                        <div className="col-span-5 pl-4 flex items-center h-full bg-zinc-100">
-                          <div className="w-fit flex truncate items-center gap-2.5">
-                            {fitName(rider.nam, 6).first &&(
-                            <span className="text-lg uppercase font-extralight tracking-tight leading-none text-black">
-                              {fitName(rider.nam, 6).first}
-                            </span>)}
-                            <span className="text-lg uppercase font-bold tracking-tight leading-none text-black">
-                              {fitName(rider.nam, 6).last}
-                            </span>
+                      let shouldShowForThisRider = false;
+                      if(!onTimeout1.current){
+                        shouldShowForThisRider = isTimingVisible;
+                      }
+                      let timingWide = 0; //0 - default, 1 - tighter, and so on
+                      let timingContent: React.ReactNode = null;
+
+
+                      // --- NEW STYLE ---
+                      // const fitName = (fullName: string) => {
+                      //   if (!fullName) return { first: '', last: '' };
+                      //   const parts = fullName.trim().split(' ');
+                      //   if (parts.length === 1) return { first: '', last: parts[0] };
+                      //   const last = parts.pop() || '';
+                      //   const first = parts.join(' ');
+                      //   return { first, last };
+                      // };
+                      // if (activeTimingMode === 'lapCount') {
+                      //   timingContent = (
+                      //     <div className="h-full font-extrabold text-base tracking-tight leading-none flex items-center justify-end gap-1">
+                      //       {isLeader && <span className="text-xs text-slate-400 uppercase mr-0.5">LAP</span>}
+                      //       <span className={isLeader ? 'text-cyan-400' : 'text-slate-200'}>
+                      //         {rider.ls !== undefined && rider.ls !== null ? rider.ls : '-'}
+                      //       </span>
+                      //     </div>
+                      //   );
+                      // } else if (activeTimingMode === 'lastLap') {
+                      //   timingContent = (
+                      //     <div className="h-full uppercase font-bold text-sm tracking-tight leading-none flex items-center justify-end">
+                      //       {rider.lsTm !== 'IN PIT' && isLeader && (
+                      //         <span className="font-extrabold text-xs tracking-wider uppercase text-cyan-400 mr-1.5">
+                      //           LAST
+                      //         </span>
+                      //       )}
+                      //       {rider.lsTm === 'IN PIT' ? (
+                      //         <span className="font-extrabold text-xs tracking-wider uppercase text-amber-400">
+                      //           IN PIT
+                      //         </span>
+                      //       ) : (
+                      //         <span className={isLeader ? 'text-cyan-400' : 'text-slate-200'}>
+                      //           {rider.lsTm || '-'}
+                      //         </span>
+                      //       )}
+                      //     </div>
+                      //   );
+                      // } else if (activeTimingMode === 'gap') {
+                      //   timingContent = (
+                      //     <div className="h-full uppercase font-bold text-sm tracking-tight leading-none flex items-center justify-end">
+                      //       {isDnf ? (
+                      //         <span className="text-rose-500 font-black text-xs">-</span>
+                      //       ) : isLeader ? (
+                      //         <span className="font-extrabold text-sm tracking-wider uppercase text-cyan-400">
+                      //           LEAD
+                      //         </span>
+                      //       ) : (
+                      //         <span className="font-mono text-cyan-400 font-semibold text-sm">
+                      //           {formatDeltaTime(rider.gp, isLeader)}
+                      //         </span>
+                      //       )}
+                      //     </div>
+                      //   );
+                      // } else if (activeTimingMode === 'interval') {
+                      //   timingContent = (
+                      //     <div className="h-full uppercase font-bold text-sm tracking-tight leading-none flex items-center justify-end">
+                      //       {isDnf ? (
+                      //         <span className="text-rose-500 font-black text-xs">-</span>
+                      //       ) : isLeader ? (
+                      //         <span className="font-extrabold text-sm tracking-wider uppercase text-cyan-400">
+                      //           INTERVAL
+                      //         </span>
+                      //       ) : (
+                      //         <span className="font-mono text-cyan-400 font-semibold text-sm">
+                      //           {formatDeltaTime(rider.df, isLeader)}
+                      //         </span>
+                      //       )}
+                      //     </div>
+                      //   );
+                      // } else if (activeTimingMode === 'bestTime') {
+                      //   if (rider.ibt && rider.btTm && !isDnf) {
+                      //     timingContent = (
+                      //       <div className="h-full uppercase font-extrabold text-sm tracking-tight leading-none flex items-center justify-end">
+                      //         <span className="text-xs font-black text-purple-400 uppercase tracking-wider mr-1.5">
+                      //           BEST
+                      //         </span>
+                      //         <span className="text-purple-300 font-mono">{rider.btTm}</span>
+                      //       </div>
+                      //     );
+                      //   } else {
+                      //     shouldShowForThisRider = false;
+                      //   }
+                      // }
+
+                      // const parsedName = fitName(rider.nam);
+                      // const container1 = isLeader
+                      //             ? 'bg-slate-900/90 border-l-2 border-cyan-400 shadow-[0_0_12px_rgba(0,229,255,0.15)]'
+                      //             : false
+                      //             ? 'bg-slate-800/80 border-amber-400'
+                      //             : 'bg-slate-900/90 border-l-2 border-transparent hover:bg-slate-800/50';
+                      // const container2 = isLeader
+                      //             ? 'bg-slate-900/90'
+                      //             : false
+                      //             ? 'bg-slate-800/80 border-amber-400'
+                      //             : 'bg-slate-900/90 border-l-2 border-transparent hover:bg-slate-800/50';
+                      // const container3 = isLeader
+                      //             ? 'bg-slate-900/90 shadow-[0_0_12px_rgba(0,229,255,0.15)]'
+                      //             : false
+                      //             ? 'bg-slate-800/80 border-amber-400'
+                      //             : 'bg-slate-900/90 border-l-2 border-transparent hover:bg-slate-800/50';
+                      // const container4 = isLeader
+                      //             ? 'bg-slate-900/90 shadow-[0_0_12px_rgba(0,229,255,0.15)]'
+                      //             : false
+                      //             ? 'bg-slate-800/80 border-amber-400'
+                      //             : 'bg-slate-900/90 border-l-2 border-transparent hover:bg-slate-800/50';
+                      // return (
+                      //   <motion.div
+                      //     layoutId={`rider-row-${rider.id}`}
+                      //     key={rider.id}
+                      //     onClick={() => {
+                      //       if (setSelectedRiderId) {
+                      //         setSelectedRiderId(rider.id === selectedRiderId ? null : rider.id);
+                      //       }
+                      //       if (setIsSetupOpen) {
+                      //         setIsSetupOpen(true);
+                      //       }
+                      //     }}
+                      //     className={`group relative flex items-center h-8 px-0 rounded transition-all cursor-pointer border-transparent`}
+                      //   >
+                      //     {/* LEFT ROW: POSITION / VEHICLE BADGE / RIDER INFO */}
+                      //     <div className="flex items-center flex-1 gap-0 h-full z-20 justify-start">
+                      //       {/* FINISH / PIT BADGE */}
+                      //       <div className="w-4 flex justify-center items-center">
+                      //         {(() => {
+                      //           const isState2to5 = status && ['PIT', 'IN', 'OUT'].includes(status);
+                      //           if (isState2to5) {
+                      //             return (
+                      //               <span
+                      //                 className={`px-1 py-0.5 rounded text-[9px] font-black uppercase tracking-tight font-mono ${
+                      //                   status === 'PIT'
+                      //                     ? 'bg-amber-500 text-black'
+                      //                     : status === 'IN'
+                      //                     ? 'bg-orange-600 text-white'
+                      //                     : 'bg-yellow-400 text-black'
+                      //                 }`}
+                      //               >
+                      //                 {status}
+                      //               </span>
+                      //             );
+                      //           }
+                      //           if ((rider.if || status === 'FIN') && !isDnf) {
+                      //             return (
+                      //               <img
+                      //                 src={finishFlagUrl}
+                      //                 alt="Finish"
+                      //                 className="h-4 w-4 object-contain pointer-events-none drop-shadow"
+                      //               />
+                      //             );
+                      //           }
+                      //           return null;
+                      //         })()}
+                      //       </div>
+
+                      //       {/* RANK POSITION / ARROW */}
+                      //       <div className={`w-9 h-full px-3 flex justify-center items-center font-bold text-base  ${container1}`}>
+                      //         {(() => {
+                      //           const status = rider.status;
+                      //           const isState5to11 = status && ['DNF', 'DNS', 'DSQ', 'DNQ', 'Ret', 'NC'].includes(status);
+
+                      //           if (isState5to11 || isNaN(Number(rawPos))) {
+                      //             const displayText =  isState5to11 ? status : (rawPos || 'DNF');
+                      //             return (
+                      //               <span
+                      //                 className="text-rose-600 text-xs font-black tracking-tight uppercase"
+                      //                 id={`rider-pos-${rider.id}`}
+                      //               >
+                      //                 {displayText}
+                      //               </span>
+                      //             );
+                      //           }
+                      //           if (rider.changeDirection === 'up') {
+                      //             return <ChevronUp className="w-4 h-4 text-emerald-400" />;
+                      //           }
+                      //           if (rider.changeDirection === 'down') {
+                      //             return <ChevronDown className="w-4 h-4 text-rose-400" />;
+                      //           }
+                      //           return (
+                      //             <span className={isLeader ? 'text-cyan-400' : 'text-slate-200'}>
+                      //               {rawPos}
+                      //             </span>
+                      //           );
+                      //         })()}
+                      //       </div>
+
+                      //       {/* VEHICLE NO BADGE */}
+                      //       <div className={`h-full ${
+                      //         container2}`}>
+                      //         <div className={`w-6 h-6 px-3 rounded-full border border-slate-600 bg-slate-800 flex items-center justify-center shrink-0`}>
+                      //           <span className="text-[11px] font-bold text-slate-300 font-mono">
+                      //             #{rider.no}
+                      //           </span>
+                      //         </div>
+                      //       </div>
+
+                      //       {/* RIDER NAME & COUNTRY */}
+                      //       <div className={`px-3 w-full truncate flex items-center gap-1.5 h-full ${container2}`}>
+                      //         <span className="text-sm uppercase font-bold tracking-tight text-white truncate">
+                      //           {parsedName.first && (
+                      //             <span className="font-normal text-slate-300 mr-1">
+                      //               {parsedName.first}
+                      //             </span>
+                      //           )}
+                      //           {parsedName.last}
+                      //         </span>
+
+                      //         {/* {rider.country && (
+                      //           <span className="text-xs font-medium text-slate-400 font-mono">
+                      //             ({rider.country})
+                      //           </span>
+                      //         )} */}
+                      //       </div>
+                      //     </div>
+
+                      //     {/* RIGHT ROW: TIMING / GAP EXTENSION */}
+                      //     <div className={`relative z-10 overflow-hidden h-full flex items-center justify-end pl-2 ml-auto pr-2 shrink-0 ${container2}`}>
+                      //       <AnimatePresence>
+                      //         {shouldShowForThisRider && (
+                      //           <motion.div
+                      //             key={`timing-badge-${rider.id}`}
+                      //             initial={{ opacity: 0, x: 10 }}
+                      //             animate={{ opacity: 1, x: 0 }}
+                      //             exit={{ opacity: 0, x: 10 }}
+                      //             transition={{ duration: 0.2, ease: 'easeOut' }}
+                      //             className="h-full flex items-center justify-end"
+                      //           >
+                      //             {timingContent}
+                      //           </motion.div>
+                      //         )}
+                      //       </AnimatePresence>
+                      //     </div>
+                      //   </motion.div>
+
+                      //  STLYE 1
+
+                      // function fitName(name: string, maxLength: number) {
+                      //   if (!name) return {first:'',last:'-'};;
+                      //   const parts = name.split(' ');
+                      //   if (name.length <= maxLength) return {first:'',last:name};
+                      //   if(parts.length === 1){
+                      //     if(name.length <= maxLength)return {first:'',last:name};
+                      //     return {first:'',last:name.slice(0, 3)};
+                      //   }
+                      //   return {first:parts[0][0],last:parts[1].slice(0, 3)};
+                      // }
+                      // if (activeTimingMode === 'lapCount') {
+                      //   timingContent = (
+                      //     <div className="h-full text-xl font-extrabold text-black tracking-tight leading-none flex items-center justify-end gap-1">
+                      //       {(isLeader && (<span className="text-md text-zinc-700 uppercase mr-0.5">LAP</span>))}
+                      //       <span>{rider.ls !== undefined && rider.ls !== null ? rider.ls : '-'}</span>
+                      //     </div>
+                          
+                      //   );
+                      //   timingWide = isLeader ? 2 : 4;
+                      // } else if (activeTimingMode === 'lastLap') {
+                      //   timingContent = (
+                      //     <div className="h-full uppercase font-bold text-xl text-zinc-700 tracking-tight leading-none flex items-center justify-end">
+                      //       {(rider.lsTm !== "IN PIT" && isLeader) && (<span className="font-extrabold text-md tracking-wider uppercase text-black mr-2">LAST</span>)}
+                      //       {rider.lsTm === "IN PIT" ? <span className="font-extrabold text-md tracking-wider uppercase text-black">IN PIT</span> : rider.lsTm || '-'}
+                      //     </div>
+                      //   );
+                      // } else if (activeTimingMode === 'gap') {
+                      //   timingContent = (
+                      //     <div className="h-full uppercase font-bold text-xl text-zinc-700 tracking-tight leading-none flex items-center justify-end">
+                      //       {isDnf ? '-' : (isLeader ? (
+                      //         <span className="font-extrabold text-md tracking-wider uppercase text-black">GAP</span>
+                      //       ) : (
+                      //         formatDeltaTime(rider.gp, isLeader)
+                      //       ))}
+                      //     </div>
+                      //   );
+                      // } else if (activeTimingMode === 'interval') {
+                      //   timingContent = (
+                      //     <div className="h-full uppercase font-bold text-xl text-zinc-700 tracking-tight leading-none flex items-center justify-end">
+                      //       {isDnf ? '-' : (isLeader ? (
+                      //         <span className="font-extrabold text-md tracking-wider uppercase text-black">INTERVAL</span>
+                      //       ) : (
+                      //         formatDeltaTime(rider.df, isLeader)
+                      //       ))}
+                      //     </div>
+                      //   );
+                      // } else if (activeTimingMode === 'bestTime') {
+                      //   // Only show best time for the single current fastest racer (where rider.ibt === true)
+                      //   if (rider.ibt && rider.btTm && !isDnf) {
+                      //     timingContent = (
+                      //       <div className="h-full uppercase font-extrabold text-xl text-zinc-700 tracking-tight leading-none flex items-center justify-end">
+                      //         <span className="font-sans text-md font-black text-amber-700 uppercase tracking-wider mr-2.5">BEST</span>
+                      //         {rider.btTm}
+                      //       </div>
+                      //     );
+                      //   } else {
+                      //     shouldShowForThisRider = false;
+                      //   }
+                      // }
+
+                      // return (
+                      //   <motion.div
+                      //     layoutId={`rider-row-${rider.id}`}
+                      //     key={rider.id}
+                      //     className={`my-0 w-full flex items-center flex-row border-transparent relative`}
+                      //     id={`rider-row-${rider.id}`}
+                      //     onClick={() => {
+                      //       if (setSelectedRiderId) {
+                      //         setSelectedRiderId(rider.id === selectedRiderId ? null : rider.id);
+                      //       }
+                      //       if (setIsSetupOpen) {
+                      //         setIsSetupOpen(true);
+                      //       }
+                      //     }}
+                      //   >
+                      //     <div className={`flex items-center grid-cols-7 w-[240px] h-full grid border-transparent relative z-20 shadow-xs`}>
+                      //       {/* FINISHED FLAG / STATUS 2-5 TEXT BADGE */}
+                      //       <div className="top-0 h-[30px] flex items-center justify-center"> 
+                      //         {(() => {
+                      //           const status = rider.status;
+                      //           const isState2to5 = status && ['PIT', 'IN', 'OUT'].includes(status);
+                      //           if (isState2to5) {
+                      //             return (
+                      //               <span className={`px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-tight shadow-sm font-mono ${
+                      //                 status === 'PIT'
+                      //                   ? 'bg-amber-500 text-black'
+                      //                   : status === 'IN'
+                      //                   ? 'bg-orange-600 text-white'
+                      //                   : 'bg-yellow-400 text-black'
+                      //               }`}>
+                      //                 {status}
+                      //               </span>
+                      //             );
+                      //           }
+                      //           // Standard RUN state: show checkered flag if finished (rider.if)
+                      //           if ((rider.if || status === 'FIN') && !isDnf && (!rider.changeDirection || rider.changeDirection === 'steady')) {
+                      //             return (
+                      //               <img
+                      //                 src={finishFlagUrl}
+                      //                 alt="Finish flag"
+                      //                 className="h-[40px] drop-shadow-2xl col-span-1 z-20 pointer-events-none"
+                      //               />
+                      //             );
+                      //           }
+                      //           return null;
+                      //         })()}
+                      //       </div>
+
+                      //       {/* POSITION & ARROW / STATUS 5-11 */}
+                      //       <div className={`col-span-1 border-transparent flex items-center justify-center h-full bg-zinc-100 ${flashClass}`}>
+                      //         {(() => {
+                      //           const status = rider.status;
+                      //           const isState5to11 = status && ['DNF', 'DNS', 'DSQ', 'DNQ', 'Ret', 'NC'].includes(status);
+                      //           // const rawPos = typeof rider.pos === 'string' ? rider.pos.trim() : (rider.lbpos ? String(rider.lbpos) : String(index + 1));
+                      //           const isDnfOrTerminal = isDnf || isState5to11 || rawPos === 'DNF' || isNaN(Number(rawPos));
+
+                      //           if (isDnfOrTerminal) {
+                      //             const displayText = isState5to11 ? status : (rawPos || 'DNF');
+                      //             return (
+                      //               <span
+                      //                 className="text-rose-600 text-xs font-black tracking-tight uppercase"
+                      //                 id={`rider-pos-${rider.id}`}
+                      //               >
+                      //                 {displayText}
+                      //               </span>
+                      //             );
+                      //           }
+
+                      //           return (
+                      //             <div>
+                      //               {rider.changeDirection === 'up' && (
+                      //                 <ChevronUp className="w-7 h-7 text-emerald-600" />
+                      //               )}
+                      //               {rider.changeDirection === 'down' && (
+                      //                 <ChevronDown className="w-7 h-7 text-red-500" />
+                      //               )}
+                      //               {(!rider.changeDirection ||
+                      //                 (rider.changeDirection !== 'up' && rider.changeDirection !== 'down')) && (
+                      //                 <span
+                      //                   className="text-black text-xl font-bold"
+                      //                   id={`rider-pos-${rider.id}`}
+                      //                 >
+                      //                   {rawPos}
+                      //                 </span>
+                      //               )}
+                      //             </div>
+                      //           );
+                      //         })()}
+                      //       </div>
+
+                      //       {/* RIDER NAME / TEAM */}
+                      //       <div className="col-span-5 pl-4 flex items-center h-full bg-zinc-100">
+                      //         <div className="w-fit flex truncate items-center gap-2.5">
+                      //           {fitName(rider.nam, 6).first &&(
+                      //           <span className="text-lg uppercase font-extralight tracking-tight leading-none text-black">
+                      //             {fitName(rider.nam, 6).first}
+                      //           </span>)}
+                      //           <span className="text-lg uppercase font-bold tracking-tight leading-none text-black">
+                      //             {fitName(rider.nam, 6).last}
+                      //           </span>
+                      //         </div>
+                              
+                      //       {/* VEHICLE NO */}
+                      //       <div className="w-15 px-2 truncate my-1 ml-auto col-span-2 mr-2 rounded-sm bg-gradient-to-r from-blue-800 to-blue-950 text-center py-0">
+                      //         <span className="text-xl font-semibold tracking-tighter text-white select-none font-sans">
+                      //           {rider.no}
+                      //         </span>
+                      //       </div>
+                      //       </div>
+
+                      //     </div>
+
+                      //     {/* INFORMATION TIMING & GAP / DIFF COLUMNS (Slides from behind racer name) */}
+                      //     <div className="relative z-10 overflow-hidden h-full flex items-center pointer-events-none">
+                      //       <AnimatePresence>
+                      //         {shouldShowForThisRider && (
+                      //           <motion.div
+                      //             key={`timing-badge-${rider.id}`}
+                      //             initial={{ x: '-100%' }}
+                      //             animate={{ x: '0%' }}
+                      //             exit={{ x: '-100%' }}
+                      //             transition={{ duration: 0.25, ease: 'easeInOut' }}
+                      //             className={`h-full text-right flex flex-col justify-center bg-zinc-200 px-2 py-0.5 z-10 border-l border-zinc-300 pointer-events-auto`}
+                      //           >
+                      //             {timingContent}
+                      //           </motion.div>
+                      //         )}
+                      //       </AnimatePresence>
+                      //     </div>
+                      //   </motion.div>
+                        //STYLE 1
+
+                        //STYLE 3
+                        
+                    const fitName = (fullName: string) => {
+                      if (!fullName) return { first: '', last: '' };
+                      const parts = fullName.trim().split(' ');
+                      if (parts.length === 1) return { first: '', last: parts[0] };
+                      const last = parts.pop() || '';
+                      const first = parts.join(' ');
+                      return { first, last };
+                    };
+                      if (activeTimingMode === 'lapCount') {
+                        timingContent = (
+                          <div className="h-full text-nowrap text-xl font-extrabold text-zinc-200 tracking-tight leading-none flex items-center justify-end gap-1">
+                            {(isLeader && (<span className="text-md text-zinc-200 uppercase mr-0.5">LAP</span>))}
+                            <span>{rider.ls !== undefined && rider.ls !== null ? rider.ls : '-'}</span>
                           </div>
                           
-                        {/* VEHICLE NO */}
-                        <div className="w-15 px-2 truncate my-1 ml-auto col-span-2 mr-2 rounded-sm bg-gradient-to-r from-blue-800 to-blue-950 text-center py-0">
-                          <span className="text-xl font-semibold tracking-tighter text-white select-none font-sans">
-                            {rider.no}
-                          </span>
-                        </div>
-                        </div>
+                        );
+                        timingWide = isLeader ? 2 : 4;
+                      } else if (activeTimingMode === 'lastLap') {
+                        timingContent = (
+                          <div className="h-full text-nowrap uppercase font-bold text-xl text-zinc-200 tracking-tight leading-none flex items-center justify-end">
+                            {(rider.lsTm !== "IN PIT" && isLeader) && (<span className="font-extrabold text-md tracking-wider uppercase text-zinc-200 mr-2">LAST</span>)}
+                            {rider.lsTm === "IN PIT" ? <span className="font-extrabold text-md tracking-wider uppercase text-zinc-200">IN PIT</span> : rider.lsTm || '-'}
+                          </div>
+                        );
+                      } else if (activeTimingMode === 'gap') {
+                        timingContent = (
+                          <div className="h-full text-nowrap uppercase font-bold text-xl text-zinc-200 tracking-tight leading-none flex items-center justify-end">
+                            {isDnf ? '-' : (isLeader ? (
+                              <span className="font-extrabold text-md tracking-wider uppercase text-zinc-200">GAP</span>
+                            ) : (
+                              formatDeltaTime(rider.gp, isLeader)
+                            ))}
+                          </div>
+                        );
+                      } else if (activeTimingMode === 'interval') {
+                        timingContent = (
+                          <div className="h-full text-nowrap uppercase font-bold text-xl text-zinc-200 tracking-tight leading-none flex items-center justify-end">
+                            {isDnf ? '-' : (isLeader ? (
+                              <span className="font-extrabold text-md tracking-wider uppercase text-zinc-200">INTERVAL</span>
+                            ) : (
+                              formatDeltaTime(rider.df, isLeader)
+                            ))}
+                          </div>
+                        );
+                      } else if (activeTimingMode === 'bestTime') {
+                        // Only show best time for the single current fastest racer (where rider.ibt === true)
+                        if (rider.ibt && rider.btTm && !isDnf) {
+                          timingContent = (
+                            <div className="h-full text-nowrap uppercase font-extrabold text-xl text-zinc-200 tracking-tight leading-none flex items-center justify-end">
+                              <span className="font-sans text-md font-black text-amber-700 uppercase tracking-wider mr-2.5">BEST</span>
+                              {rider.btTm}
+                            </div>
+                          );
+                        } else {
+                          shouldShowForThisRider = false;
+                        }
+                      }
+                      const parsedName = fitName(rider.nam);
+                      const containerStyle = `py-2`;
+                      const container1 = isLeader
+                        ? 'bgbiruYamaha border-l-2 border-cyan-400 shadow-[0_0_12px_rgba(0,229,255,0.15)]'
+                        : false
+                        ? 'bg-slate-800/80 border-amber-400'
+                        : 'bgbiruYamaha border-l-2 border-transparent';
+                      const container2 = isLeader
+                        ? 'bgbiruYamaha'
+                        : false
+                        ? 'bg-slate-800/80 border-amber-400'
+                        : 'bgbiruYamaha';
 
-                      </div>
+                      return (
+                        <motion.div
+                          layoutId={`rider-row-${rider.id}`}
+                          key={rider.id}
+                          className={`my-0.5 w-full flex items-center flex-row border-transparent relative`}
+                          id={`rider-row-${rider.id}`}
+                          onClick={() => {
+                            if (setSelectedRiderId) {
+                              setSelectedRiderId(rider.id === selectedRiderId ? null : rider.id);
+                            }
+                            if (setIsSetupOpen) {
+                              setIsSetupOpen(true);
+                            }
+                          }}
+                        >
+                        <div>
+                          <div className={`flex items-center grid-cols-10 w-[400px] h-full grid border-transparent relative z-20 shadow-xs`}>
+                            {/* FINISHED FLAG / STATUS 2-5 TEXT BADGE */}
+                            <div className="top-0 h-[30px] flex items-center justify-center"> 
+                              {(() => {
+                                const status = rider.status;
+                                const isState2to5 = status && ['PIT', 'IN', 'OUT'].includes(status);
+                                if (isState2to5) {
+                                  return (
+                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-tight shadow-sm font-mono ${
+                                      status === 'PIT'
+                                        ? 'bg-amber-500 text-black'
+                                        : status === 'IN'
+                                        ? 'bg-orange-600 text-white'
+                                        : 'bg-yellow-400 text-black'
+                                    }`}>
+                                      {status}
+                                    </span>
+                                  );
+                                }
+                                // Standard RUN state: show checkered flag if finished (rider.if)
+                                if ((rider.if || status === 'FIN') && !isDnf && (!rider.changeDirection || rider.changeDirection === 'steady')) {
+                                  return (
+                                    <img
+                                      src={finishFlagUrl}
+                                      alt="Finish flag"
+                                      className="h-[40px] drop-shadow-2xl col-span-1 z-20 pointer-events-none"
+                                    />
+                                  );
+                                }
+                                return null;
+                              })()}
+                            </div>
 
-                      {/* INFORMATION TIMING & GAP / DIFF COLUMNS (Slides from behind racer name) */}
-                      <div className="relative z-10 overflow-hidden h-full flex items-center pointer-events-none">
-                        <AnimatePresence>
-                          {shouldShowForThisRider && (
+                            {/* POSITION & ARROW / STATUS 5-11 */}
+                            <div className={`col-span-1 flex items-center justify-center h-10 ${flashClass} ${container1} ${containerStyle}`}>
+                              {(() => {
+                                const status = rider.status;
+                                const isState5to11 = status && ['DNF', 'DNS', 'DSQ', 'DNQ', 'Ret', 'NC'].includes(status);
+                                // const rawPos = typeof rider.pos === 'string' ? rider.pos.trim() : (rider.lbpos ? String(rider.lbpos) : String(index + 1));
+                                const isDnfOrTerminal = isDnf || isState5to11 || rawPos === 'DNF' || isNaN(Number(rawPos));
+
+                                if (isDnfOrTerminal) {
+                                  const displayText = isState5to11 ? status : (rawPos || 'DNF');
+                                  return (
+                                    <span
+                                      className="text-rose-600 text-xs font-black tracking-tight uppercase"
+                                      id={`rider-pos-${rider.id}`}
+                                    >
+                                      {displayText}
+                                    </span>
+                                  );
+                                }
+
+                                return (
+                                  <div>
+                                    {rider.changeDirection === 'up' && (
+                                      <ChevronUp className="w-7 h-7 text-emerald-600" />
+                                    )}
+                                    {rider.changeDirection === 'down' && (
+                                      <ChevronDown className="w-7 h-7 text-red-500" />
+                                    )}
+                                    {(!rider.changeDirection ||
+                                      (rider.changeDirection !== 'up' && rider.changeDirection !== 'down')) && (
+                                      <span
+                                        className="text-zinc-200 text-md font-bold"
+                                        id={`rider-pos-${rider.id}`}
+                                      >
+                                        {rawPos}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                            <div className={`flex h-full col-span-1 items-center ${container2}`}>
+                              <div className={`w-9 h-8 rounded-full border border-slate-600 bg-slate-800 flex items-center justify-center shrink-0 tracking-tight`}>
+                                <span className="text-[13px] font-extrabold text-slate-300 font-mono">
+                                  {rider.no}
+                                </span>
+                              </div>
+                            </div>
+                            {/* RIDER NAME / TEAM */}
+                            <div className={`col-span-7 pl-0 flex items-center h-full ${container2}`}>
+                              <span className="text-sm uppercase font-bold tracking-tight text-white truncate">
+                                {parsedName.first && (
+                                  <span className="font-normal text-slate-300 mr-1">
+                                    {parsedName.first}
+                                  </span>
+                                )}
+                                {parsedName.last}
+                              </span>
+                              
+                            {/* VEHICLE NO */}
+                            {/* <div className="w-15 px-2 truncate my-1 ml-auto col-span-2 mr-2 rounded-sm bg-gradient-to-r from-blue-800 to-blue-950 text-center py-0">
+                              <span className="text-xl font-semibold tracking-tighter text-white select-none font-sans">
+                                {rider.no}
+                              </span>
+                            </div> */}
+                            </div>
+
+                          </div>
+                        </div>
+                        
+                        {/* INFORMATION TIMING & GAP / DIFF COLUMNS (Slides from behind racer name) */}
+                        <div className={`relative z-10 overflow-hidden h-10 flex items-center justify-end shrink-0 ${container2}`}>
+                          <AnimatePresence>
+                            {/* {shouldShowForThisRider && (
+                              <motion.div
+                                key={`timing-badge-${rider.id}`}
+                                initial={{ opacity: 0, x: 10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: 10 }}
+                                transition={{ duration: 0.2, ease: 'easeOut' }}
+                                className="h-full flex items-center justify-end"
+                              >
+                                {timingContent}
+                              </motion.div>
+                            )} */}
                             <motion.div
-                              key={`timing-badge-${rider.id}`}
-                              initial={{ x: '-100%' }}
-                              animate={{ x: '0%' }}
-                              exit={{ x: '-100%' }}
-                              transition={{ duration: 0.35, ease: 'easeInOut' }}
-                              className="w-[125px] h-full text-right flex flex-col justify-center bg-zinc-200 px-2 py-1.5 z-10 border-l border-zinc-300 pointer-events-auto"
+                              animate={{ width: shouldShowForThisRider ? 170 : 0 }}
+                              transition={{ duration: 0.4, ease: 'easeInOut', delay: shouldShowForThisRider ? 0 : 0.2 }}
+                              className="h-12 rounded-lg overflow-hidden flex items-center shadow-lg"
                             >
-                              {timingContent}
+                              {/* <div className="w-[300px] p-5 shrink-0 flex items-center gap-3">
+                                {timingContent}
+                              </div> */}
+                              <AnimatePresence>
+                                {shouldShowForThisRider && (
+                                <motion.div
+                                  key={`timing-badge-${rider.id}`}
+                                  initial={{ opacity: 0, x: 10 }}
+                                  animate={{ opacity: 1, x: 0,transition: { delay: 0.3 }  }}
+                                  exit={{ opacity: 0, x: 10,transition: { delay: 0 } }}
+                                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                                  className="h-full p-4 flex items-center justify-end"
+                                >
+                                  {timingContent}
+                                </motion.div>
+                                )}
+                            </AnimatePresence>
                             </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    </motion.div>
-                  );
-                });
-              })()}
-            </AnimatePresence>
-          </div>
-        </section>
+                          </AnimatePresence>
+                        </div> 
+                        </motion.div>
+                        //STYLE 3
+
+                      );
+                    });
+                  })()}
+                </AnimatePresence>
+              </div>
+            </section>
+          </motion.div>
+          )}
+        </AnimatePresence>
       </main>
       )}
     </div>

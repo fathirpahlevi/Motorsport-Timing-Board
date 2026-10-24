@@ -342,7 +342,7 @@ export const LowerThirdPage: React.FC<LowerThirdPageProps> = ({
                     key="weather-broadcast-square"
                     initial={{ y: 380, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
-                    exit={{ y: 380, opacity: 0 }}
+                    exit={{ y: 380, opacity: 0, transition: { delay: 0.3 } }}
                     transition={{ type: 'spring', damping: 28, stiffness: 240 }}
                     className={`absolute flex ${positionWrapperClass}`}>
             <div className={flexCardsClass}>
@@ -355,7 +355,26 @@ export const LowerThirdPage: React.FC<LowerThirdPageProps> = ({
 
                 const isExiting = status === 'exiting';
                 const isEntering = status === 'entering';
-
+                const borderVariants = {
+                  hidden: {
+                    scaleX: 0,
+                    opacity: 0,
+                    transition: {
+                      duration: 0.3,
+                      ease: [0.7, 0, 0.84, 0], // Custom cubic-bezier
+                      delay: 0.15,             // 0.15s exit delay
+                    },
+                  },
+                  visible: {
+                    scaleX: 1,
+                    opacity: 1,
+                    transition: {
+                      duration: 0.25,
+                      ease: [0.16, 1, 0.3, 1], // Custom cubic-bezier
+                      delay: 0,                // No enter delay
+                    },
+                  },
+                };
                 return (
                   <div
                     key={id}
@@ -368,13 +387,30 @@ export const LowerThirdPage: React.FC<LowerThirdPageProps> = ({
                     }`}
                   >
                     <div className="rounded-none overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.85)] flex flex-col w-[380px] bg-zinc-950/95 border-x border-b border-zinc-800 backdrop-blur-md">
-                      {/* Top animated border line */}
-                      <div
-                        className={`h-1.5 w-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 ${
-                          isExiting ? 'lt-border-exit' : 'lt-border-enter'
+                      {/* Top animated border line (isExiting)*/}
+                      {/* <div
+                        className={`h-1.5 w-full bg-gradient-to-r from-zinc-300 via-white to-zinc-300 ${
+                          false ? 'lt-border-exit' : 'lt-border-enter'
                         }`}
+                      /> */}
+                      <motion.div
+                        initial="hidden"
+                        animate={ltState.visible ? {
+                              scaleX: 1,
+                              opacity: 1,
+                              transition: {
+                                duration: 0.25,
+                                ease: [0.16, 1, 0.3, 1], // Custom cubic-bezier
+                                delay: 0,                // No enter delay
+                              }} : {scaleX: 0,
+                            opacity: 0,
+                            transition: {
+                              duration: 0.3,
+                              ease: [0.7, 0, 0.84, 0], // Custom cubic-bezier
+                              delay: 0,             // 0.15s exit delay
+                            }}}
+                        className="h-1 bg-cyan-400 origin-left w-full"
                       />
-
                       {/* 2-Column Grid */}
                       <div className="grid grid-cols-[68px_1fr] min-h-[64px]">
                         {/* COLUMN 1: Position (Position number centered vertically) */}

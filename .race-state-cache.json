@@ -1,16 +1,31 @@
 {
   "savedID": {
-    "eventId": "UMKSNDLQ-2147485264",
-    "sessionId": "UMKSNDLQ-2147485264-1073745597"
+    "eventId": "KBNNNDLQ-2147487249",
+    "sessionId": "KBNNNDLQ-2147487249-1073749607"
   },
-  "speedhiveUrl": "https://speedhive.mylaps.com/livetiming/UMKSNDLQ-2147485264/sessions/UMKSNDLQ-2147485264-1073745597",
+  "speedhiveUrl": "https://speedhive.mylaps.com/livetiming/KBNNNDLQ-2147487249/sessions/KBNNNDLQ-2147487249-1073749607",
   "isManualMode": false,
   "manualRiders": [],
-  "manualOverrides": {},
+  "manualOverrides": {
+    "104": {
+      "nam": "ALIEXPRESS RACING TEAM (NB)",
+      "no": "4",
+      "status": "RUN"
+    },
+    "119": {
+      "nam": "Race to Dubai by Shaw to Win  (NB)",
+      "cb": "Dubai 664 Racing Team",
+      "no": "19",
+      "status": "RUN"
+    }
+  },
   "lowerThird": {
-    "visible": false,
-    "position": "left",
-    "selectedRiderIds": []
+    "visible": true,
+    "position": "center",
+    "selectedRiderIds": [
+      "B10",
+      "119"
+    ]
   },
   "weather": {
     "visible": false,
@@ -260,20 +275,32 @@
         ]
       }
     },
-    "lastUpdated": "11.16.07"
+    "lastUpdated": "16.21.56"
   },
   "sessionInfo": {
-    "eNam": "Personal VM",
-    "rnNam": "Race",
-    "gNam": "C30",
-    "btLpTim": "1:32.774",
-    "ls": 23,
-    "lsTg": 0,
-    "f": 3
+    "eNam": "Dubai Kartdrome Endurance Championship",
+    "rnNam": "700KM Endurance Race",
+    "gNam": "Round 2",
+    "btLpTim": "1:15.433",
+    "ls": 98,
+    "lsTg": 449,
+    "f": 0
   },
   "controlAction": {
     "position": true,
-    "timingVisible": true,
-    "time": true
+    "ltg": false,
+    "laps": false,
+    "video": false,
+    "start": false,
+    "finish": false,
+    "sidePositionPage": 0,
+    "timingVisible": false,
+    "time": false,
+    "timingMode": "lastLap",
+    "lastLap": true,
+    "racerLap": true,
+    "gap": true,
+    "diff": false,
+    "best": true
   }
 }
