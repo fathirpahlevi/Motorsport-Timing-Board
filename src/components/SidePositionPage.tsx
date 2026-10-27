@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { use, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronUp, ChevronDown } from 'lucide-react';
 import { RiderResult, ControlState } from '../types';
@@ -113,33 +113,49 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
   }
 
   const mainLogo = new URL('../img/logoYcr.png', import.meta.url).href;
+  
+  const bannerDisplayRef = useRef<'custom' | 'start' | 'finish' | 'laps' | 'ltg' | 'none'>('none');
+  const [bannerDisplay,setBannerDisplay] = useState<'custom' | 'start' | 'finish' | 'laps' | 'ltg' | 'none'>();
 
+  useEffect(() => {
+    bannerDisplayRef.current = 
+                  control.custom ? 'custom' :
+                  control.start ? 'start' :
+                  control.finish ? 'finish' :
+                  control.ltg ? 'ltg' :
+                  control.laps ? 'laps' : 'none';
+    setBannerDisplay(bannerDisplayRef.current);
+    // if(lapsToGo === 0 ){
+    //   setBannerDisplay("finish");
+    // }
+  }, [customBanner, control.start, control.finish, control.laps, control.ltg, lapsToGo, laps]);
+  
   // --------------------------------------------------------------------------------------------------
   const finishFlagUrl = new URL('../img/finish-flah-blue.png', import.meta.url).href;
   const formatDeltaTime = (timeVal?: string | number, isLeader: boolean = false): string => {
-  if (isLeader) return '-';
-  if (timeVal === undefined || timeVal === null || timeVal === '') return '-';
+    if (isLeader) return '-';
+    if (timeVal === undefined || timeVal === null || timeVal === '') return '-';
 
-  const strVal = String(timeVal).trim();
+    const strVal = String(timeVal).trim();
 
-  // If leader or zero gap
-  if (strVal === '-' || strVal === '0' || strVal === '0.000' || strVal === '0.0') {
-    return '-';
-  }
+    // If leader or zero gap
+    if (strVal === '-' || strVal === '0' || strVal === '0.000' || strVal === '0.0') {
+      return '-';
+    }
 
-  // If it already has '+' or represents lap gaps like '1 LAP', leave as is
-  if (strVal.startsWith('+') || strVal.toLowerCase().includes('lap')) {
+    // If it already has '+' or represents lap gaps like '1 LAP', leave as is
+    if (strVal.startsWith('+') || strVal.toLowerCase().includes('lap')) {
+      return strVal;
+    }
+    
+    // Append '+' for positive numeric deltas
+    const numericVal = parseFloat(strVal);
+    if (!isNaN(numericVal) && numericVal > 0) {
+      return `+${strVal}`;
+    }
+
     return strVal;
-  }
-  
-  // Append '+' for positive numeric deltas
-  const numericVal = parseFloat(strVal);
-  if (!isNaN(numericVal) && numericVal > 0) {
-    return `+${strVal}`;
-  }
-
-  return strVal;
-};
+  };
   return (
     <div
       className="mt-2 w-full min-h-screen text-zinc-100 font-sans flex flex-col relative overflow-x-hidden"
@@ -148,74 +164,101 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
       {/* Header Bar */}
       
       {headerSel === 0 && (
-      <div className="ml-10 flex flex-row w-fit bgbiruYamaha h-[60px]">
-        <div className="p-2 flex flex-row gap-3">
-          <img className="h-[40px] w-fit mb-5" src={mainLogo}/>
+      <div className="ml-10 my-1 flex flex-col h-min items-start">
+        <div className="grid grid-cols-2 justify-items-stretch w-fit h-12">
+          {/* <div className="p-2 flex flex-row gap-3">
+            <img className="h-[40px] w-fit mb-5" src={mainLogo}/>
 
-          <div className="flex flex-col w-fit gap-1">
-            <div className="flex items-center gap-2">
-              <span className="text-md font-bold text-zinc-300 uppercase tracking-widest leading-none">
-                {sessionName || '-'}
-                {/* RACE 1 */}
-              </span>
+            <div className="flex flex-col w-fit gap-1">
+              <div className="flex items-center gap-2">
+                <span className="text-md font-bold text-zinc-300 uppercase tracking-widest leading-none">
+                  {sessionName || '-'}
+                  {false && "RACE 1"}
+                </span>
+              </div>
+              <h1 className="text-xl font-black italic tracking-tighter uppercase text-zinc-100 leading-tight">
+                {raceTitle} <span className="text-zinc-300 font-normal">/ {groupName}</span>
+                {false && "Yamaha Cup Race Seri 2 2026 / DF250 TMAX - XMAX - MAXI BORE UP"}
+              </h1>
             </div>
-            <h1 className="text-xl font-black italic tracking-tighter uppercase text-zinc-100 leading-tight">
-              {raceTitle} <span className="text-zinc-300 font-normal">/ {groupName}</span>
-              {/* Yamaha Cup Race Seri 2 2026 / DF250 TMAX - XMAX - MAXI BORE UP */}
+          </div> */}
+          <div className="flex flex-col items-start justify-center w-fit p-3 bgbiruYamaha h-full">
+            <h1 className="text-2xl font-black tracking-tighter uppercase text-zinc-100 leading-tight">
+              {raceTitle}
+              {false && "Yamaha Cup Race Seri 2 2026 / DF250 TMAX - XMAX - MAXI BORE UP"}
             </h1>
           </div>
+          
+          <div className="flex flex-col w-fit bg-white items-start justify-center px-12 h-full">
+            <h1 className="text-2xl font-black uppercase textbiruYamaha">
+              {groupName}
+              {false && "DF250 TMAX - XMAX - MAXI BORE UP"}
+            </h1>
+          </div>
+          {/* <div className="col-end-3 flex flex-col w-fit bg-white items-start justify-center px-12 py-2 h-full">
+            <h1 className="text-2xl font-black uppercase textbiruYamaha">
+              {sessionName}
+              {false && "RACE"}
+            </h1>
+          </div> */}
         </div>
-
-        {showBanner && (
-          <div className="w-fit flex gap-2 h-full bgbiruYamaha p-3 items-end">
-            <div className="w-fit flex gap-2 h-min">
+        
+        <AnimatePresence>
+          {showBanner && (
+            <motion.div
+              initial={{ opacity: 0, x: -310, transition: { delay:0.2 } }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -310 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="my-2 w-fit flex bg-black/95 items-center justify-start h-full p-2 px-7"
+              >
               {/* {control.laps && !control.ltg && (
                 <div className="text-3xl font-bold italic text-zinc-200 font-sans leading-none">
                   {laps} <span className="text-lg text-zinc-300 font-normal">LAPS</span>
                 </div>
               )} */}
-              
-              {control.custom && (
-                <h1 className="text-3xl font-bold text-zinc-100 uppercase">{customBanner}</h1>
-              )}
-              {(control.start) && (
-              // {(flag === 3 || control.finish) && (
-                <h1 className="text-3xl font-bold text-zinc-100 uppercase">Start</h1>
-              )}
-              {(control.finish && !control.start) && (
-              // {(flag === 3 || control.finish) && (
-                <h1 className="text-3xl font-bold text-zinc-100 uppercase">Finish</h1>
-              )}
-              {control.laps && flag !== 3 && !control.ltg  &&  (
-                <div className="h-min">
-                  {(raceLaps > laps) ? (
-                  <div className="text-2xl font-bold text-zinc-100 font-sans leading-none">
-                    Lap {laps}
-                    <span className="text-2xl text-zinc-400"> / </span>
-                    {raceLaps}
-                  </div>) : (<div className="text-2xl font-bold text-zinc-100 font-sans leading-none">
-                    Lap {laps}
-                  </div>)}
-                  
-                </div>
-              )}
+              {(() => {
 
-              {(control.ltg && flag !== 3) && (
-              // {(control.ltg && flag !== 3) && (
-                <div className="h-min">
-                  {(lapsToGo === 1 )? (
-                  <div className="text-3xl font-bold text-zinc-200 font-sans leading-none">
-                    LAST LAP
-                  </div>) : (
-                  <div className="text-3xl font-bold italic text-zinc-200 font-sans leading-none">
-                    {lapsToGo}{' '}
-                    {flag !== 3 && <span className="text-lg text-zinc-400 font-normal">Laps to go</span>}
-                  </div>)}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+                // Priority resolution: first truthy mode wins
+
+                switch (bannerDisplay) {
+                  case 'custom':
+                    return <h1 className="text-3xl font-bold text-zinc-100 uppercase">{customBanner}</h1>;
+                  
+                  case 'start':
+                    return <h1 className="text-3xl font-bold tracking-wider font-racing text-zinc-100 uppercase">Start</h1>;
+
+                  case 'finish':
+                    return <h1 className="text-3xl font-bold font-racing tracking-wider text-zinc-100 uppercase">Finish</h1>;
+
+                  case 'ltg':
+                    return (
+                      <div>
+                        {lapsToGo === 1 ? (
+                          <h1 className="text-3xl font-bold text-zinc-200 font-sans leading-none">LAST LAP</h1>
+                        ) : (
+                          <h1 className="text-3xl font-bold italic text-zinc-200 font-sans leading-none">
+                            {lapsToGo} <span className="text-lg text-zinc-400 font-normal">Laps to go</span>
+                          </h1>
+                        )}
+                      </div>
+                    );
+
+                  case 'laps':
+                    return (
+                      <div className="h-min text-2xl font-bold text-zinc-100 font-sans leading-none">
+                        Lap {laps}
+                        {raceLaps > laps && <span className="text-zinc-400"> / {raceLaps}</span>}
+                      </div>
+                    );
+
+                  default:
+                    return null;
+                }
+              })()}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     )}
     {headerSel === 1 &&(
@@ -833,7 +876,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                           </div>
                           
                         );
-                        timingWide = isLeader ? 2 : 4;
+                        timingWide = 110;
                       } else if (activeTimingMode === 'lastLap') {
                         timingContent = (
                           <div className="h-full text-nowrap uppercase font-bold text-xl text-zinc-200 tracking-tight leading-none flex items-center justify-end">
@@ -841,6 +884,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                             {rider.lsTm === "IN PIT" ? <span className="font-extrabold text-md tracking-wider uppercase text-zinc-200">IN PIT</span> : rider.lsTm || '-'}
                           </div>
                         );
+                        timingWide = 200;
                       } else if (activeTimingMode === 'gap') {
                         timingContent = (
                           <div className="h-full text-nowrap uppercase font-bold text-xl text-zinc-200 tracking-tight leading-none flex items-center justify-end">
@@ -851,6 +895,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                             ))}
                           </div>
                         );
+                        timingWide = 130;
                       } else if (activeTimingMode === 'interval') {
                         timingContent = (
                           <div className="h-full text-nowrap uppercase font-bold text-xl text-zinc-200 tracking-tight leading-none flex items-center justify-end">
@@ -861,6 +906,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                             ))}
                           </div>
                         );
+                        timingWide = 150;
                       } else if (activeTimingMode === 'bestTime') {
                         // Only show best time for the single current fastest racer (where rider.ibt === true)
                         if (rider.ibt && rider.btTm && !isDnf) {
@@ -870,6 +916,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                               {rider.btTm}
                             </div>
                           );
+                          timingWide = 200;
                         } else {
                           shouldShowForThisRider = false;
                         }
@@ -1022,7 +1069,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                               </motion.div>
                             )} */}
                             <motion.div
-                              animate={{ width: shouldShowForThisRider ? 170 : 0 }}
+                              animate={{ width: shouldShowForThisRider ? timingWide : 0 }}
                               transition={{ duration: 0.4, ease: 'easeInOut', delay: shouldShowForThisRider ? 0 : 0.2 }}
                               className="h-12 rounded-lg overflow-hidden flex items-center shadow-lg"
                             >

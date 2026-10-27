@@ -1,6 +1,7 @@
-import React from 'react';
+import React, {useEffect, useState, useRef} from 'react';
 import { Link } from 'react-router-dom';
 import { Trophy, Printer, ArrowLeft, Flag, Medal, Clock } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { RiderResult, RaceEventData, RacerResult } from '../types';
 
 interface RaceResultPageProps {
@@ -91,26 +92,43 @@ export const RaceResultPage: React.FC<RaceResultPageProps> = ({
     finishedRacersPages.push(finishedRacers.slice(i, i + PAGE_SIZE));
   }
   finishedRacerPages(finishedRacersPages.length);
-  dividedFinishedRacers = finishedRacersPages[finishedRacerPage];
+
+  const pageRef = useRef<number>(0);
+  const [pageChange,setPageChange] = useState<boolean>(true);
+  
+  const [pageNumber,setPageNumber] = useState<number>(0);
+
+  useEffect(() => {
+    if(finishedRacerPage !== pageRef.current){
+      setPageChange(false);
+      pageRef.current = finishedRacerPage;
+      setTimeout(() =>{
+        setPageNumber(pageRef.current);
+        setPageChange(true);
+      },500);
+    }
+    
+  },[finishedRacerPage]);
+
+  dividedFinishedRacers = finishedRacersPages[pageNumber];
 
   return (
-    <div className="h-[900px] text-zinc-100 font-sans selection:bg-blue-800/0">
+    <div className="h-[809px] text-zinc-100 font-sans selection:bg-blue-800/0">
 
       {/* Main Print / Display Container */}
-      <div className="max-w-3xl mx-auto bg-blue-950/80 p-5 relative overflow-hidden">
+      <div className="max-w-3xl h-full mx-auto bg-blue-950/99 p-5 relative overflow-hidden border-10 border-zinc-300 border-r-zinc-400 border-l-zinc-300 border-b-zinc-600">
         {/* Banner Graphic Line */}
-        <div className="absolute -top-0 z-10 left-0 w-full h-1.5 bg-gradient-to-r from-yellow-600 via-yellow-600 to-yellow-300"></div>
+        {/* <div className="absolute -top-0 z-10 left-0 w-full h-3 bg-gradient-to-r from-slate-400 via-white to-zinc-600"></div> */}
 
         {/* Header Section */}
         <header className="mb-1 sticky top-0">
           <div className='w-full flex flex-row gap-3'>
-            <img className="h-[90px] w-fit mb-5" src={mainLogo}/>
+            {false && <img className="h-[90px] w-fit mb-5" src={mainLogo}/>}
               <div className='w-full flex flex-col gap-3'>
-                <h1 className="text-4xl numberFont uppercase tracking-widest text-white print:text-black">Final Results</h1>
+                <h1 className="text-4xl numberFont mx-auto uppercase tracking-widest text-white print:text-black">Results</h1>
                 <div className="w-full p-2 bg-gradient-to-r from-zinc-100 via-zinc-100 to-zinc-100/0">
                   <h1 className="text-xl font-black italic uppercase tracking-tight text-blue-900 print:text-black">
-                    {displayEventName}
-                    {/* Yamaha Cup Race Seri 2 2026 */}
+                    {displayEventName.length > 1 ? displayEventName : 'shell blu cru yamaha enduro challenge seri 1'}
                   </h1>
                 </div>
               </div>
@@ -119,8 +137,8 @@ export const RaceResultPage: React.FC<RaceResultPageProps> = ({
             <div className="w-full">
               <div className="flex items-center gap-2 mb-3">
               </div>
-              <p className="text-sm font-semibold text-zinc-100 uppercase tracking-widest mt-3 print:text-zinc-600">
-                {displayGroupName} : {displaySessionName}
+              <p className="text-2xl font-extrabold text-zinc-100 uppercase tracking-widest print:text-zinc-600">
+                {displayGroupName.length > 1 ? displayGroupName : "WR155 HOBBY"} : {displaySessionName.length > 1 ? displaySessionName : "RACE"}
                 
               {/* DF250 TMAX - XMAX - MAXI BORE UP : RACE 1 */}
               </p>
@@ -134,80 +152,92 @@ export const RaceResultPage: React.FC<RaceResultPageProps> = ({
             <p className="text-xs mt-1 text-zinc-600">-</p>
           </div>
         ) : (
-          <div className="w-full overflow-x-auto mt-5">
-            <table className="w-full text-left border-collapse">
-              <tbody className="divide-y bg-zinc-100 divide-zinc-800/60 print:divide-zinc-200">
-                {dividedFinishedRacers.map((racer) => {
-                  return (
-                    <tr
-                      key={racer.id}
-                      className={`border-transparent border-b-4 pointer border-b-blue-950`}
-                    >
-                      {/* Column 1: Finished Position */}
-                      <td className="py-1 px-1 text-center">
-                        <div className="inline-flex items-center justify-center">
-                            <span className="text-2xl font-mono font-bold text-black print:text-black">
-                              {racer.pos}
+        <AnimatePresence>
+          { pageChange &&
+          <motion.div
+            initial={{ opacity: 0, x: 10 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 10 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="flex items-center justify-end"
+          >
+            <div className="w-full overflow-x-auto mt-2">
+              <table className="w-full text-left border-collapse">
+                <tbody className="divide-y bg-zinc-100 divide-zinc-800/60 print:divide-zinc-200">
+                  {dividedFinishedRacers.map((racer) => {
+                    return (
+                      <tr
+                        key={racer.id}
+                        className={`border-transparent border-b-4 pointer border-b-blue-950`}
+                      >
+                        {/* Column 1: Finished Position */}
+                        <td className="py-1 px-1 text-center">
+                          <div className="inline-flex items-center justify-center">
+                              <span className="text-2xl font-mono font-bold text-black print:text-black">
+                                {racer.pos}
+                              </span>
+                            
+                          </div>
+                        </td>
+
+                        {/* Column 2: 1 Column with 2 Rows (Row 1: Racer Name, Row 2: Team Name) */}
+                        <td className="py-1 px-4">
+                          <div className="flex flex-col justify-center">
+                            <span className="text-base sm:text-lg font-semibold uppercase tracking-tight text-black print:text-black">
+                              {racer.name}
                             </span>
+                            <span className="text-xs font-semibold uppercase tracking-wider text-black mt-0.5">
+                              {racer.team}
+                              {/* YAMAHA RACING TEAM */}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* State 5-10/11 badge placed between racer name and their number */}
+                        <td className="py-1 px-3 text-center whitespace-nowrap">
+                          {racer.status && ['DNF', 'DNS', 'DSQ', 'DNQ', 'Ret', 'NC'].includes(racer.status) && (
+                            <span
+                              className={`inline-block font-mono font-black text-xs sm:text-sm px-2.5 py-0.5 rounded uppercase tracking-wider ${
+                                racer.status === 'FIN'
+                                  ? 'bg-emerald-600 text-white'
+                                  : racer.status === 'DNF'
+                                  ? 'bg-rose-600 text-white'
+                                  : 'bg-zinc-800 text-yellow-300'
+                              }`}
+                            >
+                              {racer.status}
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Column 3: Racer Number */}
+                        <td className="py-1 px-4 text-center">
+                          <span className="inline-block bgbiruYamaha text-white font-mono font-black italic px-3 py-1 rounded text-base sm:text-lg print:bg-zinc-200 print:text-black">
+                            #{racer.number}
+                          </span>
+                        </td>
+
+                        {/* Column 4: Total Time */}
+                        <td className="py-1 px-4 text-right">
+                          {true ? (
+                            <span className="font-mono text-base sm:text-lg font-extrabold text-black print:text-black">
+                            {racer.totalTime}
+                          </span>
+                          ) : (
+                            <span className="font-mono text-base sm:text-lg font-extrabold text-black print:text-black">
+                            {racer.btTm}
+                          </span>)}
                           
-                        </div>
-                      </td>
-
-                      {/* Column 2: 1 Column with 2 Rows (Row 1: Racer Name, Row 2: Team Name) */}
-                      <td className="py-1 px-4">
-                        <div className="flex flex-col justify-center">
-                          <span className="text-base sm:text-lg font-semibold uppercase tracking-tight text-black print:text-black">
-                            {racer.name}
-                          </span>
-                          <span className="text-xs font-semibold uppercase tracking-wider text-black mt-0.5">
-                            {racer.team}
-                            {/* YAMAHA RACING TEAM */}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* State 5-10/11 badge placed between racer name and their number */}
-                      <td className="py-1 px-3 text-center whitespace-nowrap">
-                        {racer.status && ['FIN', 'DNF', 'DNS', 'DSQ', 'DNQ', 'Ret', 'NC'].includes(racer.status) && (
-                          <span
-                            className={`inline-block font-mono font-black text-xs sm:text-sm px-2.5 py-0.5 rounded uppercase tracking-wider ${
-                              racer.status === 'FIN'
-                                ? 'bg-emerald-600 text-white'
-                                : racer.status === 'DNF'
-                                ? 'bg-rose-600 text-white'
-                                : 'bg-zinc-800 text-yellow-300'
-                            }`}
-                          >
-                            {racer.status}
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Column 3: Racer Number */}
-                      <td className="py-1 px-4 text-center">
-                        <span className="inline-block bgbiruYamaha text-white font-mono font-black italic px-3 py-1 rounded text-base sm:text-lg print:bg-zinc-200 print:text-black">
-                          #{racer.number}
-                        </span>
-                      </td>
-
-                      {/* Column 4: Total Time */}
-                      <td className="py-1 px-4 text-right">
-                        {true ? (
-                          <span className="font-mono text-base sm:text-lg font-extrabold text-black print:text-black">
-                          {racer.totalTime}
-                        </span>
-                        ) : (
-                          <span className="font-mono text-base sm:text-lg font-extrabold text-black print:text-black">
-                          {racer.btTm}
-                        </span>)}
-                        
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          
+          </motion.div>}
+        </AnimatePresence>
         )}
       </div>
     </div>
