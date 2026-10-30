@@ -165,7 +165,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
       
       {headerSel === 0 && (
       <div className="ml-10 my-1 flex flex-col h-min items-start">
-        <div className="grid grid-cols-2 justify-items-stretch w-fit h-12">
+        <div className="flex flex-row justify-items-stretch w-fit h-12">
           {/* <div className="p-2 flex flex-row gap-3">
             <img className="h-[40px] w-fit mb-5" src={mainLogo}/>
 
@@ -480,7 +480,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                       //         </span>
                       //       ) : (
                       //         <span className="font-mono text-cyan-400 font-semibold text-sm">
-                      //           {formatDeltaTime(rider.gp, isLeader)}
+                      //           {formatDeltaTime(rider.df, isLeader)}
                       //         </span>
                       //       )}
                       //     </div>
@@ -496,7 +496,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                       //         </span>
                       //       ) : (
                       //         <span className="font-mono text-cyan-400 font-semibold text-sm">
-                      //           {formatDeltaTime(rider.df, isLeader)}
+                      //           {formatDeltaTime(rider.gp, isLeader)}
                       //         </span>
                       //       )}
                       //     </div>
@@ -698,7 +698,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                       //       {isDnf ? '-' : (isLeader ? (
                       //         <span className="font-extrabold text-md tracking-wider uppercase text-black">GAP</span>
                       //       ) : (
-                      //         formatDeltaTime(rider.gp, isLeader)
+                      //         formatDeltaTime(rider.df, isLeader)
                       //       ))}
                       //     </div>
                       //   );
@@ -708,7 +708,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                       //       {isDnf ? '-' : (isLeader ? (
                       //         <span className="font-extrabold text-md tracking-wider uppercase text-black">INTERVAL</span>
                       //       ) : (
-                      //         formatDeltaTime(rider.df, isLeader)
+                      //         formatDeltaTime(rider.gp, isLeader)
                       //       ))}
                       //     </div>
                       //   );
@@ -891,7 +891,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                             {isDnf ? '-' : (isLeader ? (
                               <span className="font-extrabold text-md tracking-wider uppercase text-zinc-200">GAP</span>
                             ) : (
-                              formatDeltaTime(rider.gp, isLeader)
+                              formatDeltaTime(rider.df, isLeader)
                             ))}
                           </div>
                         );
@@ -902,7 +902,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                             {isDnf ? '-' : (isLeader ? (
                               <span className="font-extrabold text-md tracking-wider uppercase text-zinc-200">INTERVAL</span>
                             ) : (
-                              formatDeltaTime(rider.df, isLeader)
+                              formatDeltaTime(rider.gp, isLeader)
                             ))}
                           </div>
                         );
@@ -924,21 +924,21 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                       const parsedName = fitName(rider.nam);
                       const containerStyle = `py-2`;
                       const container1 = isLeader
-                        ? 'bgbiruYamaha border-l-2 border-cyan-400 shadow-[0_0_12px_rgba(0,229,255,0.15)]'
+                        ? 'bgbiruYamaha border-l-2 border-cyan-400 border-b-2 border-t-2 shadow-[0_0_12px_rgba(0,229,255,0.15)]'
                         : false
                         ? 'bg-slate-800/80 border-amber-400'
-                        : 'bgbiruYamaha border-l-2 border-transparent';
+                        : 'bgbiruYamaha border-l-2 border-slate-400 border-b-1';
                       const container2 = isLeader
-                        ? 'bgbiruYamaha'
+                        ? 'bgbiruYamaha border-cyan-400 border-b-2 border-t-2'
                         : false
                         ? 'bg-slate-800/80 border-amber-400'
-                        : 'bgbiruYamaha';
+                        : 'bgbiruYamaha border-slate-400 border-b-1';
 
                       return (
                         <motion.div
                           layoutId={`rider-row-${rider.id}`}
                           key={rider.id}
-                          className={`my-0.5 w-full flex items-center flex-row border-transparent relative`}
+                          className={`w-full flex items-center flex-row border-transparent relative`}
                           id={`rider-row-${rider.id}`}
                           onClick={() => {
                             if (setSelectedRiderId) {

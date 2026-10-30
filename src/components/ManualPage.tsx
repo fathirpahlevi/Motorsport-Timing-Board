@@ -83,6 +83,50 @@
     // State for inline editing a racer
     const [editingRiderId, setEditingRiderId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState<Partial<RiderResult>>({});
+    const [showEditTeamDropdown, setShowEditTeamDropdown] = useState<boolean>(false);
+
+    // Persistent collection of unique saved team names
+    const [savedTeamNames, setSavedTeamNames] = useState<string[]>(() => {
+        try {
+            const stored = localStorage.getItem('speedhive_saved_team_names');
+            const parsed: string[] = stored ? JSON.parse(stored) : [];
+            const initialDefaults = [
+                "Overland Motors Technical Development Group",
+                "Apex Factory Team",
+                "Monster Energy Yamaha Enduro",
+                "Global Endurance Offroad Motorsport Factory Team",
+                "Husqvarna Offroad Works Racing",
+                "YAMAHA YAMALUBE LFN HP969 RACING TEAM",
+                "PAPABE BKK X BOS CINO",
+                "YOUNGKING X AYAH GROUP RT",
+                "A21 KITA KOIZUMI TRASTAR RACING TEAM",
+                "BM31 PERMATA RENO KENZIE 22",
+                "KIRANA PHOTIDO BMK 28 DRAGON RACING TEAM"
+            ];
+            const fromRiders = riders
+                .map((r) => r.cb?.trim())
+                .filter((cb): cb is string => Boolean(cb && cb !== '-'));
+            return Array.from(new Set([...initialDefaults, ...parsed, ...fromRiders])).sort();
+        } catch {
+            return [];
+        }
+    });
+
+    const saveNewTeamNames = (names: string[]) => {
+        const cleaned = names
+            .map((n) => n?.trim())
+            .filter((n): n is string => Boolean(n && n !== '-' && n !== ''));
+        if (cleaned.length === 0) return;
+        setSavedTeamNames((prev) => {
+            const updated = Array.from(new Set([...prev, ...cleaned])).sort();
+            try {
+                localStorage.setItem('speedhive_saved_team_names', JSON.stringify(updated));
+            } catch (err) {
+                // ignore
+            }
+            return updated;
+        });
+    };
 
     // Helper to broadcast individual rider manual override (name, team, number, status)
     const broadcastManualRiderOverride = (riderId: string, override: Partial<RiderManualOverride>) => {
@@ -203,6 +247,14 @@
             }
         }
 
+        // Automatically save any imported team names from Gemini OCR or CSV
+        const importedTeams = newRiders
+            .map((r) => r.cb)
+            .filter((cb): cb is string => Boolean(cb && cb !== '-'));
+        if (importedTeams.length > 0) {
+            saveNewTeamNames(importedTeams);
+        }
+
         // Automatically ensure manual mode is active and broadcast immediately
         setIsManualMode(true);
         broadcastManualData(true, finalRiders, {
@@ -255,6 +307,11 @@
         const updated = [...riders, newRider];
         const finalRiders = recalculateGaps(updated);
         setRiders(finalRiders);
+
+        // Save new team name if provided
+        if (newRacerTeam.trim() && newRacerTeam.trim() !== '-') {
+            saveNewTeamNames([newRacerTeam.trim()]);
+        }
 
         // Reset form
         setNewRacerName('');
@@ -331,12 +388,19 @@
     const handleStartEdit = (rider: RiderResult) => {
         setEditingRiderId(rider.id);
         setEditForm({ ...rider });
+        setShowEditTeamDropdown(false);
     };
 
     // Save inline edit
     const handleSaveEdit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!editingRiderId) return;
+
+        // Save edited team name if non-empty
+        if (editForm.cb && editForm.cb.trim() && editForm.cb.trim() !== '-') {
+            saveNewTeamNames([editForm.cb.trim()]);
+        }
+        setShowEditTeamDropdown(false);
 
         const updated = riders.map((r) => {
             if (r.id === editingRiderId) {
@@ -847,15 +911,72 @@
                                     value={editForm.nam ?? racer.nam}
                                     onChange={(e) => setEditForm({ ...editForm, nam: e.target.value })}
                                     placeholder="Name"
-                                    className="bg-zinc-950 border border-zinc-700 rounded px-2 py-1 font-bold text-white"
+                                    className="bg-zinc-950 border border-zinc-700 rounded px-2 py-1 font-bold text-white text-xs"
                                 />
-                                <input
-                                    type="text"
-                                    value={editForm.cb ?? racer.cb}
-                                    onChange={(e) => setEditForm({ ...editForm, cb: e.target.value })}
-                                    placeholder="Team"
-                                    className="bg-zinc-950 border border-zinc-700 rounded px-2 py-1 text-[11px] text-zinc-300"
-                                />
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        value={editForm.cb !== undefined ? editForm.cb : racer.cb || ''}
+                                        onFocus={() => setShowEditTeamDropdown(true)}
+                                        onClick={() => setShowEditTeamDropdown(true)}
+                                        onBlur={() => setTimeout(() => setShowEditTeamDropdown(false), 200)}
+                                        onChange={(e) => {
+                                            setEditForm({ ...editForm, cb: e.target.value });
+                                            setShowEditTeamDropdown(true);
+                                        }}
+                                        placeholder="Team (click to view saved teams or search)"
+                                        className="w-full bg-zinc-950 border border-zinc-700 focus:border-amber-400 rounded px-2 py-1 text-[11px] text-zinc-300 outline-none"
+                                    />
+                                    {showEditTeamDropdown && (
+                                        <div
+                                            className="absolute left-0 top-full mt-1 w-80 max-h-56 overflow-y-auto bg-zinc-900 border border-zinc-700 rounded-lg shadow-2xl z-50 p-1.5 space-y-1 text-left"
+                                            onMouseDown={(e) => e.preventDefault()}
+                                        >
+                                            <div className="flex items-center justify-between px-2 py-1 border-b border-zinc-800 text-[10px] font-mono font-bold uppercase text-zinc-400">
+                                                <span>Saved Teams ({(() => {
+                                                    const term = (editForm.cb !== undefined ? editForm.cb : racer.cb || '').trim().toLowerCase();
+                                                    return term ? savedTeamNames.filter(t => t.toLowerCase().includes(term)).length : savedTeamNames.length;
+                                                })()})</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowEditTeamDropdown(false)}
+                                                    className="text-zinc-500 hover:text-white cursor-pointer px-1"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+                                            {(() => {
+                                                const term = (editForm.cb !== undefined ? editForm.cb : racer.cb || '').trim().toLowerCase();
+                                                const matches = term
+                                                    ? savedTeamNames.filter((t) => t.toLowerCase().includes(term))
+                                                    : savedTeamNames;
+
+                                                if (matches.length === 0) {
+                                                    return (
+                                                        <div className="px-2 py-2 text-[10px] text-zinc-400 font-mono italic">
+                                                            No matching saved teams. This team will be saved on Save (✓).
+                                                        </div>
+                                                    );
+                                                }
+
+                                                return matches.map((teamName) => (
+                                                    <button
+                                                        key={teamName}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setEditForm((prev) => ({ ...prev, cb: teamName }));
+                                                            setShowEditTeamDropdown(false);
+                                                        }}
+                                                        className="w-full text-left px-2 py-1.5 rounded hover:bg-amber-400/20 hover:text-amber-300 text-[11px] font-mono text-zinc-200 transition-colors cursor-pointer truncate block"
+                                                        title={teamName}
+                                                    >
+                                                        {teamName}
+                                                    </button>
+                                                ));
+                                            })()}
+                                        </div>
+                                    )}
+                                </div>
                                 </div>
                             </td>
                             <td className="py-3 px-3 text-right">

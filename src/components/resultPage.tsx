@@ -51,18 +51,32 @@ export const RaceResultPage: React.FC<RaceResultPageProps> = ({
   if (riders && riders.length > 0) {
     // Maintain raw data sorted position exactly as received
     const sorted = [...riders];
-
-    finishedRacers = sorted.map((r, idx) => ({
-      id: r.id || `rider-${idx}`,
-      pos: idx + 1,
-      name: r.nam || '-',
-      team: r.cb || '-',
-      number: r.no || '-',
-      status: r.status,
-      totalTime: r.tTm || '--:--.---',
-      isFinished: true,
-      btTm: r.btTm || '--:--.---',
-    }));
+    
+      finishedRacers = sorted.map((r, idx) => {
+        const isTerminal = ['DNF', 'DNS', 'DSQ', 'DNQ', 'Ret', 'NC'].includes(r.pos);
+        return{
+          id: r.id || `rider-${idx}`,
+          pos: idx + 1,
+          name: r.nam || '-',
+          team: r.cb || '-',
+          number: r.no || '-',
+          status: r.status || isTerminal ? r.pos : "",
+          totalTime: r.tTm || '--:--.---',
+          isFinished: true,
+          btTm: r.btTm || '--:--.---',
+        };
+      });
+    // finishedRacers = sorted.map((r, idx) => ({
+    //   id: r.id || `rider-${idx}`,
+    //   pos: idx + 1,
+    //   name: r.nam || '-',
+    //   team: r.cb || '-',
+    //   number: r.no || '-',
+    //   status: r.status,
+    //   totalTime: r.tTm || '--:--.---',
+    //   isFinished: true,
+    //   btTm: r.btTm || '--:--.---',
+    // }));
   } else if (resolvedData?.racers && resolvedData.racers.length > 0) {
     const finishedOnly = resolvedData.racers.filter(
       (r) => !r.status || r.status === 'FINISHED'
@@ -194,20 +208,16 @@ export const RaceResultPage: React.FC<RaceResultPageProps> = ({
                         </td>
 
                         {/* State 5-10/11 badge placed between racer name and their number */}
-                        <td className="py-1 px-3 text-center whitespace-nowrap">
-                          {racer.status && ['DNF', 'DNS', 'DSQ', 'DNQ', 'Ret', 'NC'].includes(racer.status) && (
-                            <span
-                              className={`inline-block font-mono font-black text-xs sm:text-sm px-2.5 py-0.5 rounded uppercase tracking-wider ${
-                                racer.status === 'FIN'
-                                  ? 'bg-emerald-600 text-white'
-                                  : racer.status === 'DNF'
-                                  ? 'bg-rose-600 text-white'
-                                  : 'bg-zinc-800 text-yellow-300'
-                              }`}
-                            >
-                              {racer.status}
-                            </span>
-                          )}
+                        <td className="text-center whitespace-nowrap">
+                          <div className='flex w-19 justify-center'>
+                            {racer.status && ['DNF', 'DNS', 'DSQ', 'DNQ', 'Ret', 'NC'].includes(racer.status) && (
+                              <span
+                                className={`inline-block font-mono font-black text-xs sm:text-sm px-2.5 py-0.5 rounded uppercase tracking-wider bg-rose-600 text-white`}
+                              >
+                                {racer.status}
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Column 3: Racer Number */}

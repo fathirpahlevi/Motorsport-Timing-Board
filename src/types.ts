@@ -78,6 +78,7 @@ export interface RiderResult {
   mk?: string;
   status?: RacerStatus; // 11 Racer States (RUN, PIT, IN, OUT, FIN, DNF, DNS, DSQ, DNQ, Ret, NC)
   
+  pic?: string;
   // Custom states added for UI reactivity (or injected by simulator)
   prevPos?: number;    // Previous position for animation trigger
   changeTime?: number; // Timestamp of last position change to display flash
@@ -124,10 +125,13 @@ export interface ControlState {
   [key: string]: boolean | string | number | undefined;
 }
 
+export type LowerThirdInfoMode = 'team' | 'bestTime' | 'lastLap' | 'gap' | 'interval' | 'lapCount';
+
 export interface LowerThirdState {
   visible: boolean;
   position: 'left' | 'center' | 'right';
   selectedRiderIds: string[];
+  infoMode?: LowerThirdInfoMode;
 }
 
 export interface GeocodingResult {

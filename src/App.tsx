@@ -205,7 +205,8 @@ export default function App() {
           try {
               await fetchInitialData("", "");
               connectSignalR(sessionIdRef.current);
-              document.title = raceTitle;
+              const page = (location.pathname === "/sideposition" || location.pathname === "/sideposition/") ? "Tower" : (location.pathname === "/control" || location.pathname === "/control/") ? "Control" : (location.pathname === "/manual" || location.pathname === "/manual/") ? "Manual" : (location.pathname === "/lowerthirdcontrol" || location.pathname === "/lowerthirdcontrol/") ? "Lower Third" : (location.pathname === "/weathercontrol" || location.pathname === "/weathercontrol/") ? "Weather": ""; 
+              document.title = page ? page + " - " + raceTitle : raceTitle;
           } catch (error) {
               console.error(error);
               return () => {
@@ -262,6 +263,7 @@ export default function App() {
     visible: false,
     position: 'left',
     selectedRiderIds: [],
+    infoMode: 'team',
   });
 
   // Weather Graphics State
@@ -1189,6 +1191,7 @@ export default function App() {
                   selectedRiderIds: Array.isArray(message.raceState.lowerThird.selectedRiderIds)
                     ? message.raceState.lowerThird.selectedRiderIds
                     : [],
+                  infoMode: message.raceState.lowerThird.infoMode || 'team',
                 });
               }
               if (message.raceState.weather) {
@@ -1259,6 +1262,7 @@ export default function App() {
               visible: !!message.visible,
               position: message.position || 'left',
               selectedRiderIds: Array.isArray(message.selectedRiderIds) ? message.selectedRiderIds : [],
+              infoMode: message.infoMode || 'team',
             });
           }
           else if (message.type === "weatherControl") {

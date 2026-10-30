@@ -1,6 +1,17 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { RiderResult, LowerThirdState } from '../types';
+import { RiderResult, LowerThirdState, LowerThirdInfoMode } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
+
+const formatDeltaTime = (timeVal?: string | number, isLeader: boolean = false): string => {
+  if (isLeader) return 'LEADER';
+  if (timeVal === undefined || timeVal === null || timeVal === '') return '-';
+  const strVal = String(timeVal).trim();
+  if (strVal === '-' || strVal === '0' || strVal === '0.000' || strVal === '0.0') return isLeader ? 'LEADER' : '-';
+  if (strVal.startsWith('+') || strVal.toLowerCase().includes('lap')) return strVal;
+  const num = parseFloat(strVal);
+  if (!isNaN(num) && num > 0) return `+${strVal}`;
+  return strVal;
+};
 
 interface LowerThirdPageProps {
   riders: RiderResult[];
@@ -21,7 +32,7 @@ export const LowerThirdPage: React.FC<LowerThirdPageProps> = ({
 }) => {
   // Sync state with props or fallback to default
   const [ltState, setLtState] = useState<LowerThirdState>(
-    () => propLowerThirdState || { visible: false, position: 'left', selectedRiderIds: [] }
+    () => propLowerThirdState || { visible: false, position: 'left', selectedRiderIds: [], infoMode: 'team' }
   );
 
   useEffect(() => {
@@ -32,10 +43,11 @@ export const LowerThirdPage: React.FC<LowerThirdPageProps> = ({
   useEffect(() => {
     if (!socket) return;
 
-    const parseLtData = (data: any) => ({
+    const parseLtData = (data: any): LowerThirdState => ({
       visible: !!data.visible,
       position: data.position || 'left',
       selectedRiderIds: Array.isArray(data.selectedRiderIds) ? data.selectedRiderIds : [],
+      infoMode: (data.infoMode as LowerThirdInfoMode) || 'team',
     });
 
     const handleMessage = (event: MessageEvent) => {
@@ -189,11 +201,83 @@ export const LowerThirdPage: React.FC<LowerThirdPageProps> = ({
                         </div>
                       </div>
 
-                      {/* ROW 2: Team Name */}
-                      <div className="px-3 pb-1.5 bg-zinc-950 flex items-center">
-                        <span className="text-lg font-bold uppercase tracking-wider text-zinc-300 truncate font-mono">
-                          {teamName}
-                        </span>
+                      {/* ROW 2: Selected Info (Team, Best Time, Last Lap, Gap, Interval, Lap Count) */}
+                      <div className="px-3 pb-1.5 bg-zinc-950 flex items-center min-h-[36px]">
+                        {(() => {
+                          const mode = ltState.infoMode || 'team';
+                          const isLeader = posDisplay === '1' || rider.lbpos === 1;
+
+                          switch (mode) {
+                            case 'bestTime':
+                              return (
+                                <div className="flex items-center gap-2 truncate">
+                                  <span className="text-[10px] font-mono font-bold text-amber-400 uppercase tracking-widest px-1.5 py-0.5 rounded bg-amber-400/10 border border-amber-400/30">
+                                    BEST LAP
+                                  </span>
+                                  <span className="text-lg font-mono font-black tracking-wider text-white truncate">
+                                    {rider.btTm || '--:--.---'}
+                                  </span>
+                                </div>
+                              );
+                            case 'lastLap':
+                              return (
+                                <div className="flex items-center gap-2 truncate">
+                                  <span className="text-[10px] font-mono font-bold text-cyan-400 uppercase tracking-widest px-1.5 py-0.5 rounded bg-cyan-400/10 border border-cyan-400/30">
+                                    LAST LAP
+                                  </span>
+                                  <span className="text-lg font-mono font-black tracking-wider text-white truncate">
+                                    {rider.lsTm || '--:--.---'}
+                                  </span>
+                                </div>
+                              );
+                            case 'gap': {
+                              const gapText = formatDeltaTime(rider.gp, isLeader);
+                              return (
+                                <div className="flex items-center gap-2 truncate">
+                                  <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-400/10 border border-emerald-400/30">
+                                    GAP
+                                  </span>
+                                  <span className="text-lg font-mono font-black tracking-wider text-white truncate">
+                                    {gapText}
+                                  </span>
+                                </div>
+                              );
+                            }
+                            case 'interval': {
+                              const intText = formatDeltaTime(rider.df, isLeader);
+                              return (
+                                <div className="flex items-center gap-2 truncate">
+                                  <span className="text-[10px] font-mono font-bold text-blue-400 uppercase tracking-widest px-1.5 py-0.5 rounded bg-blue-400/10 border border-blue-400/30">
+                                    INTERVAL
+                                  </span>
+                                  <span className="text-lg font-mono font-black tracking-wider text-white truncate">
+                                    {intText}
+                                  </span>
+                                </div>
+                              );
+                            }
+                            case 'lapCount': {
+                              const lapsCount = rider.ls !== undefined && rider.ls !== null ? `${rider.ls} LAPS` : '-';
+                              return (
+                                <div className="flex items-center gap-2 truncate">
+                                  <span className="text-[10px] font-mono font-bold text-yellow-400 uppercase tracking-widest px-1.5 py-0.5 rounded bg-yellow-400/10 border border-yellow-400/30">
+                                    LAPS
+                                  </span>
+                                  <span className="text-lg font-mono font-black tracking-wider text-white truncate">
+                                    {lapsCount}
+                                  </span>
+                                </div>
+                              );
+                            }
+                            case 'team':
+                            default:
+                              return (
+                                <span className="text-lg font-bold uppercase tracking-wider text-zinc-300 truncate font-mono">
+                                  {teamName}
+                                </span>
+                              );
+                          }
+                        })()}
                       </div>
                     </div>
                   </div>

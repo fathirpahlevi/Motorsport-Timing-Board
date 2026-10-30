@@ -47,6 +47,7 @@ let raceState = {
     visible: false,
     position: 'left' as 'left' | 'center' | 'right',
     selectedRiderIds: [] as string[],
+    infoMode: 'team' as 'team' | 'bestTime' | 'lastLap' | 'gap' | 'interval' | 'lapCount',
   },
   weather: INITIAL_WEATHER_STATE,
 };
@@ -652,6 +653,7 @@ ${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
         visible: raceState.lowerThird.visible,
         position: raceState.lowerThird.position,
         selectedRiderIds: raceState.lowerThird.selectedRiderIds,
+        infoMode: raceState.lowerThird.infoMode || 'team',
       });
     }
 
@@ -782,6 +784,7 @@ ${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
               visible: raceState.lowerThird.visible,
               position: raceState.lowerThird.position,
               selectedRiderIds: raceState.lowerThird.selectedRiderIds,
+              infoMode: raceState.lowerThird.infoMode || 'team',
             });
           }
           if (raceState.weather) {
@@ -796,14 +799,16 @@ ${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
             visible: !!message.visible,
             position: message.position || 'left',
             selectedRiderIds: Array.isArray(message.selectedRiderIds) ? message.selectedRiderIds : [],
+            infoMode: message.infoMode || raceState.lowerThird?.infoMode || 'team',
           };
           saveRaceStateCache();
-          console.log(`[WS Server] LowerThird Control: visible=${raceState.lowerThird.visible}, pos=${raceState.lowerThird.position}, count=${raceState.lowerThird.selectedRiderIds.length}`);
+          console.log(`[WS Server] LowerThird Control: visible=${raceState.lowerThird.visible}, pos=${raceState.lowerThird.position}, count=${raceState.lowerThird.selectedRiderIds.length}, infoMode=${raceState.lowerThird.infoMode}`);
           broadcastToAll({
             type: "lowerThirdControl",
             visible: raceState.lowerThird.visible,
             position: raceState.lowerThird.position,
             selectedRiderIds: raceState.lowerThird.selectedRiderIds,
+            infoMode: raceState.lowerThird.infoMode,
           });
         }
         else if (message.type === 'weatherControl') {

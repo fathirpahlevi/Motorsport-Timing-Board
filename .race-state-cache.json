@@ -1,22 +1,27 @@
 {
   "savedID": {
-    "eventId": "",
-    "sessionId": ""
+    "eventId": "GLMQNDLQ-2147486567",
+    "sessionId": "GLMQNDLQ-2147486567-1073759799"
   },
-  "speedhiveUrl": "",
+  "speedhiveUrl": "https://speedhive.mylaps.com/livetiming/GLMQNDLQ-2147486567/sessions/GLMQNDLQ-2147486567-1073759799",
   "isManualMode": false,
   "manualRiders": [],
-  "manualSessionInfo": null,
-  "manualOverrides": {},
+  "manualOverrides": {
+    "46": {
+      "status": "RUN"
+    },
+    "84": {
+      "status": "RUN"
+    }
+  },
   "lowerThird": {
-    "visible": true,
-    "position": "center",
-    "selectedRiderIds": [
-      "115"
-    ]
+    "visible": false,
+    "position": "left",
+    "selectedRiderIds": [],
+    "infoMode": "team"
   },
   "weather": {
-    "visible": true,
+    "visible": false,
     "mode": "simple",
     "regionName": "Cigugur",
     "regionAdmin": "Jawa Barat",
@@ -263,8 +268,15 @@
         ]
       }
     },
-    "lastUpdated": "14.38.44"
+    "lastUpdated": "12.57.19"
   },
-  "sessionInfo": null,
+  "sessionInfo": {
+    "eNam": "28th to 31st Oct Public Karting Event",
+    "rnNam": "Session 14",
+    "gNam": "28th October 2026",
+    "ls": 0,
+    "lsTg": 0,
+    "f": 3
+  },
   "controlAction": {}
 }
