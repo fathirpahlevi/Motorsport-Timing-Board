@@ -41,6 +41,7 @@ export interface RiderManualOverride {
   cb?: string;
   no?: string;
   status?: RacerStatus;
+  pic?: string;
 }
 
 export interface RiderResult {

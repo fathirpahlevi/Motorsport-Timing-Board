@@ -1,4 +1,4 @@
-    import React, { useState } from 'react';
+    import React, { useState, useEffect } from 'react';
     import { Link } from 'react-router-dom';
     import {
     ToggleLeft,
@@ -19,11 +19,13 @@
     RefreshCw,
     Trophy,
     LayoutGrid,
-    FileText
+    FileText,
+    Camera
     } from 'lucide-react';
     import { RiderResult, RacerStatus, RACER_STATUS_OPTIONS, RiderManualOverride } from '../types';
     import { recalculateGaps } from '../data';
     import { StartingGridImporter } from './StartingGridImporter';
+    import { RacerPhotoModal } from './RacerPhotoModal';
 
     interface ManualPageProps {
     riders: RiderResult[];
@@ -47,6 +49,69 @@
     socket: WebSocket | null;
     addWebSocketLog?: (direction: 'in' | 'system' | 'sent' | 'ws' | 'packet' | 'sim', message: string) => void;
     }
+
+    interface RacerPhotoThumbProps {
+        racer: RiderResult;
+        pos: number | string;
+        isManualMode: boolean;
+        onClick: () => void;
+    }
+
+    const RacerPhotoThumb: React.FC<RacerPhotoThumbProps> = ({ racer, pos, isManualMode, onClick }) => {
+        const [imgSrc, setImgSrc] = useState<string>(() => {
+            if (racer.pic) return racer.pic;
+            return isManualMode
+                ? `/api/racer-image/racer-${pos}.png`
+                : `/api/racer-image/racer-id-${racer.id}.png`;
+        });
+        const [fallbackStep, setFallbackStep] = useState(0);
+
+        useEffect(() => {
+            if (racer.pic) {
+                setImgSrc(racer.pic);
+                setFallbackStep(0);
+            } else {
+                setImgSrc(
+                    isManualMode
+                        ? `/api/racer-image/racer-${pos}.png`
+                        : `/api/racer-image/racer-id-${racer.id}.png`
+                );
+                setFallbackStep(0);
+            }
+        }, [racer.pic, racer.id, pos, isManualMode]);
+
+        const handleError = () => {
+            if (fallbackStep === 0) {
+                // Secondary check: if live mode check position file
+                setFallbackStep(1);
+                setImgSrc(`/api/racer-image/racer-${pos}.png`);
+            } else {
+                // Final fallback to silhouette
+                setFallbackStep(2);
+                setImgSrc('/src/img/racer-silhouette.png');
+            }
+        };
+
+        return (
+            <button
+                type="button"
+                onClick={onClick}
+                className="relative group w-10 h-10 rounded-lg overflow-hidden border border-zinc-750 hover:border-blue-400 bg-zinc-900 transition-all cursor-pointer flex items-center justify-center shrink-0 shadow-sm"
+                title={`Import / Crop Photo for #${racer.no} ${racer.nam}`}
+            >
+                <img
+                    src={imgSrc}
+                    onError={handleError}
+                    alt={racer.nam}
+                    className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity text-white">
+                    <Camera className="w-3.5 h-3.5 text-blue-400" />
+                    <span className="text-[8px] font-mono uppercase tracking-wider font-bold">Crop</span>
+                </div>
+            </button>
+        );
+    };
 
     export const ManualPage: React.FC<ManualPageProps> = ({
     riders,
@@ -84,6 +149,44 @@
     const [editingRiderId, setEditingRiderId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState<Partial<RiderResult>>({});
     const [showEditTeamDropdown, setShowEditTeamDropdown] = useState<boolean>(false);
+
+    // Racer photograph import & 1:1 cropper modal states
+    const [photoModalRacer, setPhotoModalRacer] = useState<RiderResult | null>(null);
+    const [photoModalPos, setPhotoModalPos] = useState<number | string>(1);
+    const [isPhotoModalOpen, setIsPhotoModalOpen] = useState<boolean>(false);
+
+    const handleOpenPhotoModal = (racer: RiderResult, pos: number | string) => {
+        setPhotoModalRacer(racer);
+        setPhotoModalPos(pos);
+        setIsPhotoModalOpen(true);
+    };
+
+    const handlePhotoSaved = (racerId: string, imageUrl: string) => {
+        setRiders((prev) => {
+            const updated = prev.map((r, idx) => {
+                const p = r.pos || r.lbpos || idx + 1;
+                if (String(r.id) === String(racerId) || (isManualMode && String(p) === String(photoModalPos))) {
+                    return { ...r, pic: imageUrl };
+                }
+                return r;
+            });
+            if (isManualMode) {
+                broadcastManualData(true, updated);
+            }
+            return updated;
+        });
+
+        // In Live mode, sync the override via WebSocket to all display pages
+        if (!isManualMode && socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(
+                JSON.stringify({
+                    type: 'manualRiderOverride',
+                    riderId: racerId,
+                    override: { pic: imageUrl },
+                })
+            );
+        }
+    };
 
     // Persistent collection of unique saved team names
     const [savedTeamNames, setSavedTeamNames] = useState<string[]>(() => {
@@ -872,6 +975,7 @@
                     <tr className="border-b border-zinc-800 text-[10px] font-black uppercase tracking-widest text-zinc-400 font-mono">
                         <th className="py-2.5 px-3 text-center w-16">Pos</th>
                         <th className="py-2.5 px-3 text-center w-16">No.</th>
+                        <th className="py-2.5 px-3 text-center w-16">Photo</th>
                         <th className="py-2.5 px-3">Racer & Team</th>
                         <th className="py-2.5 px-3 text-right">Total Time</th>
                         <th className="py-2.5 px-3 text-right">Best Lap</th>
@@ -903,6 +1007,16 @@
                                 onChange={(e) => setEditForm({ ...editForm, no: e.target.value })}
                                 className="w-12 bg-zinc-950 border border-zinc-700 rounded px-1.5 py-1 text-center font-bold text-white"
                                 />
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                                <div className="flex items-center justify-center">
+                                    <RacerPhotoThumb
+                                        racer={racer}
+                                        pos={editForm.pos ?? racer.pos ?? racer.lbpos ?? (idx + 1)}
+                                        isManualMode={isManualMode}
+                                        onClick={() => handleOpenPhotoModal(racer, editForm.pos ?? racer.pos ?? racer.lbpos ?? (idx + 1))}
+                                    />
+                                </div>
                             </td>
                             <td className="py-3 px-3">
                                 <div className="flex flex-col gap-1">
@@ -1048,6 +1162,16 @@
                                 #{racer.no}
                             </span>
                             </td>
+                            <td className="py-3 px-3 text-center">
+                                <div className="flex items-center justify-center">
+                                    <RacerPhotoThumb
+                                        racer={racer}
+                                        pos={racer.pos || racer.lbpos || (idx + 1)}
+                                        isManualMode={isManualMode}
+                                        onClick={() => handleOpenPhotoModal(racer, racer.pos || racer.lbpos || (idx + 1))}
+                                    />
+                                </div>
+                            </td>
                             <td className="py-3 px-3">
                             <div className="flex flex-col">
                                 <span className="font-bold text-white uppercase text-sm">
@@ -1136,6 +1260,16 @@
             )}
             </div>
         </div>
+
+        {/* Racer Photograph Import & 1:1 Cropper Modal */}
+        <RacerPhotoModal
+            isOpen={isPhotoModalOpen}
+            onClose={() => setIsPhotoModalOpen(false)}
+            racer={photoModalRacer}
+            racerPos={photoModalPos}
+            isManualMode={isManualMode}
+            onSaved={handlePhotoSaved}
+        />
         </div>
     );
     };

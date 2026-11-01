@@ -304,6 +304,9 @@ export default function App() {
     if (ov.status !== undefined) {
       updated.status = ov.status;
     }
+    if (ov.pic !== undefined) {
+      updated.pic = ov.pic;
+    }
     return updated;
   };
 
@@ -1256,6 +1259,27 @@ export default function App() {
               };
             }
             setRiders((prev) => prev.map(applyManualOverridesToRider));
+          }
+          else if (message.type === "racerImageUpdated") {
+            addWebSocketLog('system', `📸 Received racer image update for ${message.riderId || `P${message.pos}`}`);
+            if (message.riderId && message.imageUrl) {
+              manualOverridesRef.current[message.riderId] = {
+                ...(manualOverridesRef.current[message.riderId] || {}),
+                pic: message.imageUrl,
+              };
+            }
+            setRiders((prev) =>
+              prev.map((r, idx) => {
+                const rPos = parseInt(String(r.pos || r.lbpos || idx + 1), 10);
+                if (
+                  (message.riderId && String(r.id) === String(message.riderId)) ||
+                  (message.isManualMode && rPos === parseInt(String(message.pos), 10))
+                ) {
+                  return { ...r, pic: message.imageUrl };
+                }
+                return applyManualOverridesToRider(r);
+              })
+            );
           }
           else if (message.type === "lowerThirdControl") {
             setLowerThirdState({

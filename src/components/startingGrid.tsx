@@ -210,7 +210,7 @@
     defaultPic: string;
     }
 
-    const RacerCard: React.FC<RacerCardProps> = ({ racer, offsetIndex,pic,defaultPic }) => {
+    const RacerCard: React.FC<RacerCardProps> = ({ racer, offsetIndex, pic, defaultPic }) => {
     const translateYClass =
         offsetIndex === 0
         ? 'translate-y-0'
@@ -222,6 +222,42 @@
     const nameParts = (racer.nam || '').split(' ');
     const firstName = nameParts[0] || '';
     const lastName = nameParts.slice(1).join(' ') || '';
+
+    // Multi-tier photograph resolver:
+    // 1. Explicit racer.pic (set via import modal or override)
+    // 2. /api/racer-image/racer-id-${racer.id}.png (Live mode saved by racer ID)
+    // 3. /api/racer-image/racer-${racer.lbpos || racer.pos}.png (Manual mode saved by grid pos)
+    // 4. Bundled URL passed via pic prop
+    // 5. defaultPic (silhouette)
+    const initialPic = racer.pic
+      ? racer.pic
+      : `/api/racer-image/racer-id-${racer.id}.png`;
+
+    const [currentPicSrc, setCurrentPicSrc] = useState<string>(initialPic);
+    const [fallbackStage, setFallbackStage] = useState<number>(0);
+
+    useEffect(() => {
+      if (racer.pic) {
+        setCurrentPicSrc(racer.pic);
+        setFallbackStage(0);
+      } else {
+        setCurrentPicSrc(`/api/racer-image/racer-id-${racer.id}.png`);
+        setFallbackStage(0);
+      }
+    }, [racer.pic, racer.id, racer.lbpos, racer.pos]);
+
+    const handleImgError = () => {
+      if (fallbackStage === 0) {
+        setFallbackStage(1);
+        setCurrentPicSrc(`/api/racer-image/racer-${racer.lbpos || racer.pos}.png`);
+      } else if (fallbackStage === 1) {
+        setFallbackStage(2);
+        setCurrentPicSrc(pic);
+      } else {
+        setFallbackStage(3);
+        setCurrentPicSrc(defaultPic);
+      }
+    };
 
     return (
         <div
@@ -257,12 +293,13 @@
                     <div className="absolute bottom-1.5 left-0 right-0 h-[4px] bg-white" />
                     
                 </div>
-                <img className="absolute bottom-3 right-0 z-20 h-[240px] w-fit" src={pic} 
-                    onError={(e) => {
-                        e.currentTarget.src = defaultPic;
-                    }}
-                    alt="Racer Picture" />
-                </div>
+                <img
+                    className="absolute bottom-3 right-0 z-20 h-[240px] w-fit object-contain select-none pointer-events-none"
+                    src={currentPicSrc} 
+                    onError={handleImgError}
+                    alt="Racer Picture"
+                />
+            </div>
         </div>
     );
     };

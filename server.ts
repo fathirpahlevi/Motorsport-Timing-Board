@@ -252,6 +252,135 @@ ${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
     }
   });
 
+  // Local image directories for starting grid racer photographs
+  const IMG_DIR = path.join(process.cwd(), "src", "img");
+  const UNUSED_IMG_DIR = path.join(IMG_DIR, "unusedPic");
+  if (!fs.existsSync(IMG_DIR)) {
+    fs.mkdirSync(IMG_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(UNUSED_IMG_DIR)) {
+    fs.mkdirSync(UNUSED_IMG_DIR, { recursive: true });
+  }
+
+  // Serve racer images with no-cache revalidation headers
+  app.get("/api/racer-image/:filename", (req, res) => {
+    const safeFilename = path.basename(req.params.filename);
+    const filePath = path.join(IMG_DIR, safeFilename);
+    if (fs.existsSync(filePath)) {
+      res.setHeader("Cache-Control", "no-cache, must-revalidate");
+      return res.sendFile(filePath);
+    }
+    // Return 404 so client fallback cascades cleanly
+    return res.status(404).send("Image not found");
+  });
+  app.use("/api/racer-image", express.static(IMG_DIR));
+  app.use("/src/img", express.static(IMG_DIR));
+
+  // REST API for uploading and cropping racer photographs
+  app.post("/api/upload-racer-image", (req, res) => {
+    try {
+      const { imageData, isManualMode, pos, riderId } = req.body;
+      if (!imageData) {
+        return res.status(400).json({ success: false, error: "No image data provided" });
+      }
+
+      const cleanPos = parseInt(String(pos), 10) || 1;
+      const cleanRiderId = String(riderId ?? '').trim();
+
+      // Manual mode: saved according to position "racer-${pos}.png"
+      // Live mode: saved by racer id "racer-id-${riderId}.png"
+      const targetFilename = isManualMode
+        ? `racer-${cleanPos}.png`
+        : `racer-id-${cleanRiderId}.png`;
+
+      const targetPath = path.join(IMG_DIR, targetFilename);
+
+      // If existing image exists, archive to unusedPic to prevent overwriting
+      if (fs.existsSync(targetPath)) {
+        const ext = path.extname(targetFilename) || '.png';
+        const base = path.basename(targetFilename, ext);
+        const archiveFilename = `${base}_${Date.now()}${ext}`;
+        const archivePath = path.join(UNUSED_IMG_DIR, archiveFilename);
+        try {
+          fs.renameSync(targetPath, archivePath);
+          console.log(`[Image Upload] Moved existing ${targetFilename} to unusedPic/${archiveFilename}`);
+        } catch (moveErr) {
+          console.error(`[Image Upload] Failed to archive old file:`, moveErr);
+        }
+      }
+
+      // Clean base64 header and save cropped image
+      const base64Data = imageData.replace(/^data:image\/\w+;base64,/, "");
+      fs.writeFileSync(targetPath, Buffer.from(base64Data, "base64"));
+      console.log(`[Image Upload] Successfully saved new image: ${targetFilename}`);
+
+      const imageUrl = `/api/racer-image/${targetFilename}?t=${Date.now()}`;
+
+      // Retain per-racer state on server
+      if (isManualMode) {
+        if (Array.isArray(raceState.manualRiders)) {
+          raceState.manualRiders = raceState.manualRiders.map((r: any, idx: number) => {
+            const rPos = parseInt(String(r.pos || r.lbpos || idx + 1), 10);
+            if (String(r.id) === cleanRiderId || rPos === cleanPos) {
+              return { ...r, pic: imageUrl };
+            }
+            return r;
+          });
+        }
+        if (cleanRiderId) {
+          raceState.manualOverrides[cleanRiderId] = {
+            ...(raceState.manualOverrides[cleanRiderId] || {}),
+            pic: imageUrl,
+          };
+        }
+      } else {
+        if (cleanRiderId) {
+          raceState.manualOverrides[cleanRiderId] = {
+            ...(raceState.manualOverrides[cleanRiderId] || {}),
+            pic: imageUrl,
+          };
+        }
+        if (raceState.results && Array.isArray(raceState.results.l)) {
+          raceState.results.l = raceState.results.l.map((r: any) => {
+            if (String(r.id) === cleanRiderId) {
+              return { ...r, pic: imageUrl };
+            }
+            return r;
+          });
+        }
+      }
+
+      saveRaceStateCache();
+
+      // Broadcast update to all connected frontend screens
+      broadcastToAll({
+        type: "racerImageUpdated",
+        riderId: cleanRiderId,
+        pos: cleanPos,
+        imageUrl,
+        isManualMode: Boolean(isManualMode),
+      });
+
+      if (cleanRiderId) {
+        broadcastToAll({
+          type: "manualRiderOverride",
+          riderId: cleanRiderId,
+          override: { pic: imageUrl },
+          manualOverrides: raceState.manualOverrides,
+        });
+      }
+
+      return res.json({
+        success: true,
+        filename: targetFilename,
+        imageUrl,
+      });
+    } catch (err: any) {
+      console.error("[Image Upload Error]", err);
+      return res.status(500).json({ success: false, error: err.message || "Failed to save racer photograph" });
+    }
+  });
+
   // REST API for manual riders persistence
   app.post("/api/manual-riders", (req, res) => {
     const newRider = req.body;
