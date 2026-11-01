@@ -166,13 +166,13 @@
                     {/* TOP ROW (P1, P2, P3) */}
                     <div className="grid grid-cols-3 gap-14 items-end">
                         {row1.map((racer, index) => {
-                            const pic = new URL(`../img/racer-${racer.lbpos}.png`, import.meta.url).href;
+                            // const pic = new URL(`../img/racer-${racer.lbpos}.png`, import.meta.url).href;
                             return(
                                 <RacerCard
                                 key={racer.id || racer.pos || index}
                                 racer={racer}
                                 offsetIndex={index}
-                                pic={pic}
+                                pic={defaultPic}
                                 defaultPic={defaultPic}
                                 />
                             )
@@ -182,13 +182,13 @@
                     {/* BOTTOM ROW (P4, P5, P6) */}
                     <div className="grid grid-cols-3 gap-14 items-end mb-40">
                     {row2.map((racer, index) => {
-                            const pic = new URL(`../img/racer-${racer.lbpos}.png`, import.meta.url).href;
+                            // const pic = new URL(`../img/racer-${racer.lbpos}.png`, import.meta.url).href;
                             return(
                                 <RacerCard
                                 key={racer.id || racer.pos || index}
                                 racer={racer}
                                 offsetIndex={index}
-                                pic={pic}
+                                pic={defaultPic}
                                 defaultPic={defaultPic}
                                 />
                             )
@@ -230,33 +230,33 @@
     // 4. Bundled URL passed via pic prop
     // 5. defaultPic (silhouette)
     const initialPic = racer.pic
-      ? racer.pic
-      : `/api/racer-image/racer-id-${racer.id}.png`;
+        ? racer.pic
+        : `/api/racer-image/racer-id-${racer.id}.png`;
 
     const [currentPicSrc, setCurrentPicSrc] = useState<string>(initialPic);
     const [fallbackStage, setFallbackStage] = useState<number>(0);
 
     useEffect(() => {
-      if (racer.pic) {
-        setCurrentPicSrc(racer.pic);
-        setFallbackStage(0);
-      } else {
-        setCurrentPicSrc(`/api/racer-image/racer-id-${racer.id}.png`);
-        setFallbackStage(0);
-      }
-    }, [racer.pic, racer.id, racer.lbpos, racer.pos]);
+        if (racer.pic) {
+            setCurrentPicSrc(racer.pic);
+            setFallbackStage(0);
+        } else {
+            setCurrentPicSrc(`/api/racer-image/racer-id-${racer.id}.png`);
+            setFallbackStage(0);
+        }
+        }, [racer.pic, racer.id, racer.lbpos, racer.pos]);
 
-    const handleImgError = () => {
-      if (fallbackStage === 0) {
-        setFallbackStage(1);
-        setCurrentPicSrc(`/api/racer-image/racer-${racer.lbpos || racer.pos}.png`);
-      } else if (fallbackStage === 1) {
-        setFallbackStage(2);
-        setCurrentPicSrc(pic);
-      } else {
-        setFallbackStage(3);
-        setCurrentPicSrc(defaultPic);
-      }
+        const handleImgError = () => {
+        if (fallbackStage === 0) {
+            setFallbackStage(1);
+            setCurrentPicSrc(`/api/racer-image/racer-${racer.lbpos || racer.pos}.png`);
+        } else if (fallbackStage === 1) {
+            setFallbackStage(2);
+            setCurrentPicSrc(pic);
+        } else {
+            setFallbackStage(3);
+            setCurrentPicSrc(defaultPic);
+        }
     };
 
     return (

@@ -1694,17 +1694,17 @@ export default function App() {
         <Route 
           path="/startingGrid"
           element={
-            <StartingGrid 
-            circuitTitle='SIRKUIT LANUD SUTAN SJAHRIR'
-            racers={riders}
-            activePageIndex={startingGridPage}
-            pages={handleGridPages}
-            raceTitle={raceTitle}
-            groupName={groupName}
-            sessionName={sessionName}
-          />
+              <StartingGrid 
+              circuitTitle='SIRKUIT LANUD SUTAN SJAHRIR'
+              racers={riders}
+              activePageIndex={startingGridPage}
+              pages={handleGridPages}
+              raceTitle={raceTitle}
+              groupName={groupName}
+              sessionName={sessionName}
+            />
           }
-          />
+        />
         <Route 
           path="/testRTMP"
           element={

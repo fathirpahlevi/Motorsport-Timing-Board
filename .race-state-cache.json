@@ -1,18 +1,35 @@
 {
   "savedID": {
-    "eventId": "",
-    "sessionId": ""
+    "eventId": "UQMLNDLQ-2147483728",
+    "sessionId": "UQMLNDLQ-2147483728-1073742061"
   },
-  "speedhiveUrl": "",
+  "speedhiveUrl": "https://speedhive.mylaps.com/livetiming/UQMLNDLQ-2147483728/sessions/UQMLNDLQ-2147483728-1073742061",
   "isManualMode": false,
   "manualRiders": [],
-  "manualSessionInfo": null,
   "manualOverrides": {
-    "test-r99": {
-      "pic": "/api/racer-image/racer-99.png?t=1793539223561"
+    "77": {
+      "pic": "/api/racer-image/racer-id-77.png?t=1793542916140"
     },
-    "live-racer-42": {
-      "pic": "/api/racer-image/racer-id-live-racer-42.png?t=1793539228081"
+    "120": {
+      "pic": "/api/racer-image/racer-id-120.png?t=1793541946637"
+    },
+    "220": {
+      "pic": "/api/racer-image/racer-id-220.png?t=1793542962146"
+    },
+    "801": {
+      "pic": "/api/racer-image/racer-id-801.png?t=1793542073150"
+    },
+    "802": {
+      "pic": "/api/racer-image/racer-id-802.png?t=1793542080764"
+    },
+    "831": {
+      "pic": "/api/racer-image/racer-id-831.png?t=1793542155485"
+    },
+    "7933534": {
+      "pic": "/api/racer-image/racer-id-7933534.png?t=1793543957331"
+    },
+    "10097758": {
+      "pic": "/api/racer-image/racer-id-10097758.png?t=1793542943077"
     }
   },
   "lowerThird": {
@@ -269,8 +286,34 @@
         ]
       }
     },
-    "lastUpdated": "1:20:12 PM"
+    "lastUpdated": "21.30.17"
   },
-  "sessionInfo": null,
-  "controlAction": {}
+  "sessionInfo": {
+    "eNam": "MON Maisplakken Cross Handel",
+    "rnNam": "B Finale",
+    "gNam": "KL7 Liefhebbers MX1",
+    "btLpTim": "1:14.344",
+    "ls": 5,
+    "lsTg": 0,
+    "f": 0,
+    "id": "UQMLNDLQ-2147483728-1073742061",
+    "eId": "UQMLNDLQ-2147483728",
+    "rnTp": 0,
+    "rcTm": "00:06:30.000",
+    "stod": "01-11-2026 15:32:00.000",
+    "tmTg": "00:05:29.000"
+  },
+  "controlAction": {
+    "position": true,
+    "ltg": false,
+    "timingMode": "interval",
+    "best": true,
+    "timingVisible": true,
+    "time": true,
+    "racerLap": true,
+    "laps": false,
+    "lastLap": true,
+    "diff": true,
+    "gap": false
+  }
 }

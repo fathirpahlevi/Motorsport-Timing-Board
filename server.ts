@@ -174,26 +174,26 @@ async function startServer() {
       });
 
       const promptText = `You are an expert motorsport timing official and starting grid data extraction specialist.
-Analyze the provided starting grid screenshot(s) / document image(s) (${images.length} image(s) provided).
-Extract all racers/riders along with any race/event title metadata visible.
+        Analyze the provided starting grid screenshot(s) / document image(s) (${images.length} image(s) provided).
+        Extract all racers/riders along with any race/event title metadata visible.
 
-Extract:
-1. Event title / Championship name (if visible)
-2. Class / Group name (e.g. Novice, Expert, Moto3, TMAX, Bebek, etc., if visible)
-3. Session title (e.g. Starting Grid, Race 1, etc., if visible)
-4. Starting Grid Racers in order of their starting grid position:
-   - pos: Starting grid position number (integer 1, 2, 3...)
-   - no: Bike/racer number (string e.g. "46", "99", "12")
-   - nam: Racer full name
-   - cb: Team name or club or sponsor (if present, otherwise empty string)
-   - btTm: Best qualifying/lap time if present (e.g. "1:42.123", otherwise empty string)
-   - tTm: Gap or total time if present (otherwise empty string)
+        Extract:
+        1. Event title / Championship name (if visible)
+        2. Class / Group name (e.g. Novice, Expert, Moto3, TMAX, Bebek, etc., if visible)
+        3. Session title (e.g. Starting Grid, Race 1, etc., if visible)
+        4. Starting Grid Racers in order of their starting grid position:
+          - pos: Starting grid position number (integer 1, 2, 3...)
+          - no: Bike/racer number (string e.g. "46", "99", "12")
+          - nam: Racer full name
+          - cb: Team name or club or sponsor (if present, otherwise empty string)
+          - btTm: Best qualifying/lap time if present (e.g. "1:42.123", otherwise empty string)
+          - tTm: Gap or total time if present (otherwise empty string)
 
-Important guidelines:
-- If there are multiple images (pages, columns, or sequential screenshots), merge all racers into a single sequential starting grid (P1, P2, P3, ...).
-- Maintain correct starting grid order. If explicit position numbers are missing, assign sequential positions 1, 2, 3... based on visual grid layout.
-- Clean up any OCR noise in names, numbers, and times.
-${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
+        Important guidelines:
+        - If there are multiple images (pages, columns, or sequential screenshots), merge all racers into a single sequential starting grid (P1, P2, P3, ...).
+        - Maintain correct starting grid order. If explicit position numbers are missing, assign sequential positions 1, 2, 3... based on visual grid layout.
+        - Clean up any OCR noise in names, numbers, and times.
+        ${promptHint ? `Additional user hint: ${promptHint}` : ""}`;
 
       const response = await ai.models.generateContent({
         model: "gemini-3.1-flash-lite", //gemma-4-26b-a4b-it gemini-3.8-flash gemini-3.1-flash-lite

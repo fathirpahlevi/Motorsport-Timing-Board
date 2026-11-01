@@ -26,7 +26,7 @@ export default defineConfig(() => {
     },
   build: {
     // Set to false to disable source maps completely in production builds
-    sourcemap: false, 
+    sourcemap: true, 
   },
   };
 });
