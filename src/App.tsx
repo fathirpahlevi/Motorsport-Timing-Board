@@ -452,9 +452,8 @@ export default function App() {
       currentPositions[r.id] = r.lbpos;
     });
     previousPositionsRef.current = currentPositions;
-    const hasActiveHighlights = riders.some(
-      (r) => r.changeDirection !== 'steady' && Date.now() - r.changeTime < 3000
-    );
+    const hasActiveHighlights = riders.some((r) => r.changeDirection !== 'steady' && r.changeTime !== undefined && Date.now() - r.changeTime < 3000); //r.changeDirection !== 'steady' && Date.now() - r.changeTime < 3000
+      
 
     if (!hasActiveHighlights) return;
 
@@ -464,7 +463,8 @@ export default function App() {
         let updated = false;
         
         const nextRiders = currentRiders.map((rider) => {
-          if (rider.changeDirection !== 'steady' && Date.now() - rider.changeTime >= 3000) {
+          const changeTime = rider.changeTime || 0;
+          if (rider.changeDirection !== 'steady' && Date.now() - changeTime >= 3000) {//if (rider.changeDirection !== 'steady' && Date.now() - rider.changeTime >= 3000) {
             updated = true;
             return { ...rider, changeDirection: 'steady' as const };
           }
@@ -557,7 +557,7 @@ export default function App() {
           } else {
             // If the position didn't change in this packet, retain the old direction 
             // if it hasn't expired yet (we check expiration inside the cleanup loop)
-            changeDirection = existing ? existing.changeDirection : 'steady';
+            changeDirection = existing ? existing.changeDirection ? existing.changeDirection : 'steady' : 'steady';//existing ? existing.changeDirection ? existing.changeDirection : 'steady' : 'steady';
           }
         }
 
@@ -684,8 +684,8 @@ export default function App() {
       if (data.gNam) setGroupName(data.gNam);
       if (data.btLpTim) setSessionBestTime(data.btLpTim);
       // if (data.ls) setRaceLaps(data.ls);
-      if (data.ls) setLaps(data.ls);
-      if (data.lsTg) setLapsToGo(data.lsTg);
+      if (typeof data.ls === "number") setLaps(data.ls);
+      if (typeof data.lsTg === "number") setLapsToGo(data.lsTg);
       if (typeof data.f === "number") setFlag(data.f);
       if (data.id) setSessionId(data.id);
       if (data.eventId) setEventId(data.eventId);
@@ -838,8 +838,8 @@ export default function App() {
           else if(message.type === 'customBanner' && location.pathname === "/sideposition"){
             setCustomBanner(message.text);
           }
-          else if(message.type === "startingGrid" && location.pathname === "/startingGrid"){
-              // console.log("New Speedhive URL", message.url);
+          else if(message.type === "startingGrid" && (location.pathname === "/startingGrid" ||location.pathname === "/startinggrid")){
+              // console.log("Grid Page");
               if((startingGridPageRef.current + 1) === gridPagesRef.current){
                   setStartingGridPage(0);
               }
@@ -1753,7 +1753,6 @@ export default function App() {
               isConsoleOpen={isConsoleOpen}
               setIsConsoleOpen={setIsConsoleOpen}
               webSocketLogs={webSocketLogs}
-              playBeep={playBeep}
             />}
         />
         <Route 

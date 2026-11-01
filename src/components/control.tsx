@@ -432,105 +432,105 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
 
                     {/* TOWER TIMING COLUMN SELECTOR & DISPLAY */}
                     <div className="col-span-2 flex flex-col gap-2.5 p-3.5 bg-zinc-100 border border-zinc-300 rounded-xl my-1">
-                      <div className="flex items-center justify-between">
-                        <span className="uppercase text-gray-700 font-bold text-xs tracking-wider">
-                          Timing/Lap Control
-                        </span>
-                        <span className={`text-[10px] font-mono uppercase font-bold px-2 py-0.5 rounded ${
-                          isTimingVisible ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-200 text-zinc-600'
-                        }`}>
-                          Status: {isTimingVisible ? 'VISIBLE' : 'HIDDEN'}
-                        </span>
-                      </div>
+                        <div className="flex items-center justify-between">
+                            <span className="uppercase text-gray-700 font-bold text-xs tracking-wider">
+                            Timing/Lap Control
+                            </span>
+                            <span className={`text-[10px] font-mono uppercase font-bold px-2 py-0.5 rounded ${
+                            isTimingVisible ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-200 text-zinc-600'
+                            }`}>
+                            Status: {isTimingVisible ? 'VISIBLE' : 'HIDDEN'}
+                            </span>
+                        </div>
 
-                      {/* 5 HORIZONTAL SELECTOR BUTTONS */}
-                      <div className="grid grid-cols-5 gap-1.5 w-full">
-                        {timingOptions.map((opt) => {
-                          const isActive = currentTimingMode === opt.id;
-                          return (
+                        {/* 5 HORIZONTAL SELECTOR BUTTONS */}
+                        <div className="grid grid-cols-5 gap-1.5 w-full">
+                            {timingOptions.map((opt) => {
+                            const isActive = currentTimingMode === opt.id;
+                            return (
+                                <button
+                                key={opt.id}
+                                type="button"
+                                onClick={() => handleSelectTimingMode(opt.id)}
+                                disabled={connectionStatus !== 'connected'}
+                                className={`py-2.5 px-1 text-center font-bold text-xs uppercase rounded transition-all cursor-pointer ${
+                                    isActive
+                                    ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-400 font-black'
+                                    : 'bg-zinc-200 hover:bg-zinc-300 text-zinc-700'
+                                } disabled:opacity-40 disabled:cursor-not-allowed`}
+                                >
+                                {opt.label}
+                                </button>
+                            );
+                            })}
+                        </div>
+
+                        {/* SHOW AND HIDE BUTTONS */}
+                        <div className="grid grid-cols-2 gap-2 mt-0.5">
                             <button
-                              key={opt.id}
-                              type="button"
-                              onClick={() => handleSelectTimingMode(opt.id)}
-                              disabled={connectionStatus !== 'connected'}
-                              className={`py-2.5 px-1 text-center font-bold text-xs uppercase rounded transition-all cursor-pointer ${
-                                isActive
-                                  ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-400 font-black'
-                                  : 'bg-zinc-200 hover:bg-zinc-300 text-zinc-700'
-                              } disabled:opacity-40 disabled:cursor-not-allowed`}
+                            type="button"
+                            onClick={() => handleToggleTimingVisible(true)}
+                            disabled={connectionStatus !== 'connected'}
+                            className={`w-full py-2.5 px-4 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                                isTimingVisible
+                                ? 'bg-emerald-600 ring-2 ring-emerald-400 font-black shadow-md'
+                                : 'bg-emerald-500 hover:bg-emerald-600'
+                            } disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed`}
                             >
-                              {opt.label}
+                            Show
                             </button>
-                          );
-                        })}
-                      </div>
 
-                      {/* SHOW AND HIDE BUTTONS */}
-                      <div className="grid grid-cols-2 gap-2 mt-0.5">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleTimingVisible(true)}
-                          disabled={connectionStatus !== 'connected'}
-                          className={`w-full py-2.5 px-4 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
-                            isTimingVisible
-                              ? 'bg-emerald-600 ring-2 ring-emerald-400 font-black shadow-md'
-                              : 'bg-emerald-500 hover:bg-emerald-600'
-                          } disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed`}
-                        >
-                          Show
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleToggleTimingVisible(false)}
-                          disabled={connectionStatus !== 'connected'}
-                          className={`w-full py-2.5 px-4 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
-                            !isTimingVisible
-                              ? 'bg-rose-600 ring-2 ring-rose-400 font-black shadow-md'
-                              : 'bg-rose-500 hover:bg-rose-600'
-                          } disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed`}
-                        >
-                          Hide
-                        </button>
-                      </div>
+                            <button
+                            type="button"
+                            onClick={() => handleToggleTimingVisible(false)}
+                            disabled={connectionStatus !== 'connected'}
+                            className={`w-full py-2.5 px-4 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                                !isTimingVisible
+                                ? 'bg-rose-600 ring-2 ring-rose-400 font-black shadow-md'
+                                : 'bg-rose-500 hover:bg-rose-600'
+                            } disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed`}
+                            >
+                            Hide
+                            </button>
+                        </div>
                     </div>
 
                     {/* TOWER RACERS PAGINATION CONTROL (MAX 19) */}
                     <div className="col-span-2 flex flex-col gap-2.5 p-3.5 bg-zinc-100 border border-zinc-300 rounded-xl my-1">
-                      <div className="flex items-center justify-between">
-                        <div className="flex flex-col">
-                          <span className="uppercase text-gray-700 font-bold text-xs tracking-wider">
-                            Racers ({riders?.length || 0} Total)
-                          </span>
-                          <span className="text-[11px] text-zinc-500 font-medium">
-                            {towerPagination.pageRangeText ? `Showing: P${towerPagination.pageRangeText}` : 'All shown'}
-                          </span>
+                        <div className="flex items-center justify-between">
+                            <div className="flex flex-col">
+                                <span className="uppercase text-gray-700 font-bold text-xs tracking-wider">
+                                Racers ({riders?.length || 0} Total)
+                                </span>
+                                <span className="text-[11px] text-zinc-500 font-medium">
+                                {towerPagination.pageRangeText ? `Showing: P${towerPagination.pageRangeText}` : 'All shown'}
+                                </span>
+                            </div>
+                            <span className="text-xs font-mono font-bold text-red-500">
+                                Page {towerPagination.currentPage + 1} / {towerPagination.totalPages}
+                            </span>
+                            </div>
+
+                            {/* SIMPLE PREVIOUS AND NEXT BUTTONS */}
+                            <div className="grid grid-cols-2 gap-2 mt-0.5">
+                            <button
+                                type="button"
+                                onClick={handlePrevTowerPage}
+                                disabled={connectionStatus !== 'connected' || towerPagination.currentPage <= 0}
+                                className="w-full py-3 px-4 text-white font-bold text-xs uppercase tracking-wider rounded-lg bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                                ◀ Previous
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={handleNextTowerPage}
+                                disabled={connectionStatus !== 'connected' || towerPagination.currentPage >= towerPagination.totalPages - 1}
+                                className="w-full py-3 px-4 text-white font-bold text-xs uppercase tracking-wider rounded-lg bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                                Next ▶
+                            </button>
                         </div>
-                        <span className="text-xs font-mono font-bold text-red-500">
-                          Page {towerPagination.currentPage + 1} / {towerPagination.totalPages}
-                        </span>
-                      </div>
-
-                      {/* SIMPLE PREVIOUS AND NEXT BUTTONS */}
-                      <div className="grid grid-cols-2 gap-2 mt-0.5">
-                        <button
-                          type="button"
-                          onClick={handlePrevTowerPage}
-                          disabled={connectionStatus !== 'connected' || towerPagination.currentPage <= 0}
-                          className="w-full py-3 px-4 text-white font-bold text-xs uppercase tracking-wider rounded-lg bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
-                        >
-                          ◀ Previous
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={handleNextTowerPage}
-                          disabled={connectionStatus !== 'connected' || towerPagination.currentPage >= towerPagination.totalPages - 1}
-                          className="w-full py-3 px-4 text-white font-bold text-xs uppercase tracking-wider rounded-lg bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
-                        >
-                          Next ▶
-                        </button>
-                      </div>
                     </div>
 
                     <button 

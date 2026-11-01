@@ -87,22 +87,26 @@ export const WeatherPage: React.FC<WeatherPageProps> = ({ weatherState = INITIAL
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: -380, opacity: 0 }}
             transition={{ type: 'spring', damping: 28, stiffness: 240 }}
-            className={`pointer-events-auto fixed left-8 top-1/2 -translate-y-1/2 w-80 ${mode === 'simple' ? '' : 'h-50'} bg-zinc-950/92 backdrop-blur-md border border-zinc-700/75 shadow-2xl rounded-sm p-2 flex flex-col justify-between text-zinc-100`}
+            className={`pointer-events-auto fixed left-8 top-1/2 -translate-y-1/2 w-80 ${mode === 'simple' ? '' : 'h-50'} bg-gradient-to-r from-blue-700 via-blue-900 to-blue-600/0  shadow-2xl rounded-sm flex flex-col justify-between text-white`}
           >
             {/* Header: Location & Status */}
-            <div className="border-b border-zinc-800 pb-0 flex items-start justify-between">
-              <div className="min-w-0 pr-2 gap-1 flex flex-col">
-                <div className="text-[10px] font-mono tracking-widest text-zinc-400 uppercase font-semibold">
-                  LOCAL WEATHER
-                </div>
-                <div className="flex items-center justify-between gap-1">
-                  <p className="text-[14px] font-black tracking-wide text-zinc-50 uppercase leading-tight">
-                    {regionName}
-                  </p>
-                  <span className="text-zinc-500">|</span>
-                  <p className="text-[13px] font-medium text-zinc-400 truncate">
-                    {regionAdmin}
-                  </p>
+            <div className="w-full pb-0 flex items-start justify-between">
+              <div className="min-w-0 gap-1 flex flex-col w-full">
+                <div className='flex flex-row bg-zinc-100'>
+                  <div className="text-[13px] w-70 flex bg-zinc-900 justify-center items-center font-mono tracking-normal text-zinc-100 uppercase font-semibold">
+                    LOCAL WEATHER
+                  </div>
+                  <div className='flex truncate'>
+                    <div className="flex truncate px-1 items-center justify-between gap-1">
+                      <p className="text-[14px] font-black tracking-wide text-blue-800 uppercase leading-tight">
+                        {regionName}
+                      </p>
+                      <span className="text-zinc-800">|</span>
+                      <p className="text-[13px] font-black text-blue-800 truncate">
+                        {regionAdmin}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
               {/* <div className="flex flex-col items-end shrink-0 pt-0.5">
@@ -117,15 +121,16 @@ export const WeatherPage: React.FC<WeatherPageProps> = ({ weatherState = INITIAL
 
             {/* Mode: Simple (3-5 key data points with clean symbols & neutral aesthetic) */}
             {mode === 'simple' ? (
-              <div className="flex-1 flex flex-col justify-center pt-1 space-y-0">
+              <div className="flex-1 flex flex-col justify-center p-1 space-y-0">
                 {/* Main Temperature and Icon */}
                 <div className="flex items-center justify-between px-1">
                   <div>
-                    <div className="flex items-baseline space-x-1">
-                      <span className="text-4xl font-black tracking-tighter text-white font-mono">
+                    <div className="flex items-baseline">
+                      <span className="text-4xl mt-1 font-black tracking-tighter text-white font-mono">
                         {temp}
                       </span>
-                      <span className="text-lg font-semibold text-zinc-400">°C</span>
+                      <span className="text-2xl ml-1 mb-auto font-semibold text-zinc-200">°</span>
+                      <span className="text-3xl font-semibold text-zinc-200">C</span>
                     </div>
                     {/* Condition text */}
                     <div className="px-1">
@@ -135,27 +140,27 @@ export const WeatherPage: React.FC<WeatherPageProps> = ({ weatherState = INITIAL
                     </div>
                   </div>
                   
-                  <div className="p-2.5 bg-zinc-900 border border-zinc-800 rounded-md text-zinc-200">
+                  <div className="bg-blue-900/50 border-blue-900/70 rounded p-2.5 text-white">
                     <WeatherSymbol code={wCode} isDay={isDay} className="w-9 h-9" />
                   </div>
                     {/* Wind */}
-                  <div className="bg-zinc-900/90 border border-zinc-800/70 rounded p-1.5 flex flex-col items-center text-center">
-                    <div className="flex items-center space-x-1 text-zinc-400 mb-0.5">
+                  <div className="bg-blue-900/50 border-blue-900/70 rounded p-1.5 flex flex-col items-center text-center">
+                    <div className="flex items-center space-x-1 text-white mb-0.5">
                       <Wind className="w-3.5 h-3.5" />
                       <span className="text-[9px]">WIND</span>
                     </div>
-                    <span className="font-bold text-zinc-200 text-[11px] leading-tight truncate w-full">
-                      {windSpeed} <span className="text-[9px] font-normal text-zinc-400">km/h</span>
+                    <span className="font-bold text-white text-[11px] leading-tight truncate w-full">
+                      {windSpeed} <span className="text-[9px] font-normal text-white">km/h</span>
                     </span>
-                    <span className="text-[10px] text-zinc-400 font-semibold">{windCompass}</span>
+                    <span className="text-[10px] text-white font-semibold">{windCompass}</span>
                   </div>
                   
-                  <div className="bg-zinc-900/90 border pb-5 border-zinc-800/70 rounded p-1.5 flex flex-col items-center text-center">
-                    <div className="flex items-center space-x-1 text-zinc-400 mb-0.5">
+                  <div className="bg-blue-900/50 pb-5 border-blue-900/70 rounded p-1.5 flex flex-col items-center text-center">
+                    <div className="flex items-center space-x-1 text-white mb-0.5">
                       <CloudRain className="w-3.5 h-3.5" />
                       <span className="text-[9px]">RAIN</span>
                     </div>
-                    <span className="font-bold text-zinc-200 text-[11px] leading-tight">
+                    <span className="font-bold text-white text-[11px] leading-tight">
                       {precipProbMax}%
                     </span>
                   </div>

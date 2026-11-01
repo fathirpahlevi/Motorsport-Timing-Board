@@ -113,7 +113,6 @@ interface MainBoardPageProps {
   isConsoleOpen: boolean;
   setIsConsoleOpen: (open: boolean) => void;
   webSocketLogs: Array<{ id: string; time: string; type: 'ws' | 'packet' | 'system' | 'sim'; text: string }>;
-  playBeep: (type: string) => void;
 }
 
 export const MainBoardPage: React.FC<MainBoardPageProps> = ({
@@ -176,7 +175,6 @@ export const MainBoardPage: React.FC<MainBoardPageProps> = ({
   isConsoleOpen,
   setIsConsoleOpen,
   webSocketLogs,
-  playBeep,
 }) => {
   return (
     <div className="min-h-screen text-zinc-100 font-sans flex flex-col bg-zinc-950 selection:bg-red-600 selection:text-white relative overflow-x-hidden" id="main-container">
@@ -194,7 +192,6 @@ export const MainBoardPage: React.FC<MainBoardPageProps> = ({
             <div
               onClick={() => {
                 setIsSetupOpen(true);
-                playBeep('tick');
               }}
               className={`px-3 py-1.5 text-[10px] font-black tracking-widest flex items-center gap-2 transition-all cursor-pointer select-none rounded ${
                 connectionStatus === 'connected'
@@ -235,7 +232,6 @@ export const MainBoardPage: React.FC<MainBoardPageProps> = ({
                 <button
                   onClick={() => {
                     triggerStopwatch(isTimerRunning ? 'pause' : 'start');
-                    playBeep('tick');
                   }}
                   className={`p-1.5 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 transition-colors border border-zinc-850 flex items-center gap-1 cursor-pointer`}
                   title={isTimerRunning ? 'Pause timer' : 'Start timer'}
@@ -245,7 +241,6 @@ export const MainBoardPage: React.FC<MainBoardPageProps> = ({
                 <button
                   onClick={() => {
                     triggerStopwatch('reset');
-                    playBeep('tick');
                   }}
                   className="p-1.5 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 transition-colors border border-zinc-800 cursor-pointer"
                   title="Reset timer"
@@ -258,7 +253,6 @@ export const MainBoardPage: React.FC<MainBoardPageProps> = ({
             <button
               onClick={() => {
                 setIsSetupOpen(true);
-                playBeep('tick');
               }}
               className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white border border-red-700 rounded-lg text-xs font-sans font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-red-950/40"
               title="Open Timing Desk Settings Drawer"
@@ -396,7 +390,6 @@ export const MainBoardPage: React.FC<MainBoardPageProps> = ({
                         onClick={() => {
                           setSelectedRiderId(isSelected ? null : rider.id);
                           setIsSetupOpen(true);
-                          playBeep('tick');
                         }}
                       >
                         {/* Position */}
@@ -677,7 +670,6 @@ export const MainBoardPage: React.FC<MainBoardPageProps> = ({
                     <button
                       onClick={() => {
                         setAutoSimulate(true);
-                        playBeep('tick');
                       }}
                       className={`py-2 px-3 rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                         autoSimulate ? 'bg-red-600 text-white shadow-md' : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850'
@@ -688,7 +680,6 @@ export const MainBoardPage: React.FC<MainBoardPageProps> = ({
                     <button
                       onClick={() => {
                         setAutoSimulate(false);
-                        playBeep('tick');
                       }}
                       className={`py-2 px-3 rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                         !autoSimulate ? 'bg-red-600 text-white shadow-md' : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850'

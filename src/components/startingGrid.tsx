@@ -23,7 +23,7 @@
     pages,
     }) => {
     const [pageIndex, setPageIndex] = useState(0);
-
+    console.log("Page Index", pageIndex);
     // Calculate total pages based on 6 racers per screen
     const gridPages = Math.max(1, Math.ceil(racers.length / 6));
 
@@ -92,6 +92,7 @@
 
     const mainLogo = new URL('../img/logoYcr.png', import.meta.url).href;
     const defaultPic = new URL('../img/racer-silhouette.png', import.meta.url).href;
+    
 
     return (
         <div className="relative w-[2300px] h-[1420px] bg-transparent text-white font-sans overflow-hidden select-none p-8 bg-gradient-to-b from-zinc-900/80 via-slate-600/70 to-zinc-900/0">
@@ -135,16 +136,15 @@
                     ) : (
                         racers.map((num, idx) => {
                             const racerNumber = num.no;
-                            const isCurrentPageRacer = pageRacers.some(
-                            (r) => String(r.no) === String(racerNumber)
-                            );
+                            const testPage = (idx < (pageIndex * 6 + 6)) && (idx >= ((pageIndex - 1) * 6 + 6));
+                            const isCurrentPageRacer = pageRacers.some((r) => String(r.no) === String(racerNumber));
                             const itemClass = stairCase[idx % 3];
 
                             return (
                             <div
                                 key={num.id || idx}
                                 className={`flex items-center justify-center h-7 border rounded-[2px] text-lg numberFontLighter tracking-wider transition-colors duration-300 ${itemClass} ${
-                                isCurrentPageRacer
+                                testPage
                                     ? 'bg-gradient-to-r from-blue-800 via-blue-950 via-blue-900 to-zinc-950 border-blue-400 text-white shadow-[0_0_8px_rgba(37,99,235,0.8)]'
                                     : 'bg-slate-800/80 border-slate-600/60 text-slate-400'
                                 }`}
@@ -165,26 +165,34 @@
                 >
                     {/* TOP ROW (P1, P2, P3) */}
                     <div className="grid grid-cols-3 gap-14 items-end">
-                    {row1.map((racer, index) => (
-                        <RacerCard
-                        key={racer.id || racer.pos || index}
-                        racer={racer}
-                        offsetIndex={index}
-                        pic={racer.pic || defaultPic}
-                        />
-                    ))}
+                        {row1.map((racer, index) => {
+                            const pic = new URL(`../img/racer-${racer.lbpos}.png`, import.meta.url).href;
+                            return(
+                                <RacerCard
+                                key={racer.id || racer.pos || index}
+                                racer={racer}
+                                offsetIndex={index}
+                                pic={pic}
+                                defaultPic={defaultPic}
+                                />
+                            )
+                        })}
                     </div>
 
                     {/* BOTTOM ROW (P4, P5, P6) */}
                     <div className="grid grid-cols-3 gap-14 items-end mb-40">
-                    {row2.map((racer, index) => (
-                        <RacerCard
-                        key={racer.id || racer.pos || index}
-                        racer={racer}
-                        offsetIndex={index}
-                        pic={racer.pic || defaultPic}
-                        />
-                    ))}
+                    {row2.map((racer, index) => {
+                            const pic = new URL(`../img/racer-${racer.lbpos}.png`, import.meta.url).href;
+                            return(
+                                <RacerCard
+                                key={racer.id || racer.pos || index}
+                                racer={racer}
+                                offsetIndex={index}
+                                pic={pic}
+                                defaultPic={defaultPic}
+                                />
+                            )
+                        })}
                     </div>
                 </div>
             </div>
@@ -199,9 +207,10 @@
     racer: RiderResult;
     offsetIndex: number;
     pic: string;
+    defaultPic: string;
     }
 
-    const RacerCard: React.FC<RacerCardProps> = ({ racer, offsetIndex,pic }) => {
+    const RacerCard: React.FC<RacerCardProps> = ({ racer, offsetIndex,pic,defaultPic }) => {
     const translateYClass =
         offsetIndex === 0
         ? 'translate-y-0'
@@ -248,8 +257,12 @@
                     <div className="absolute bottom-1.5 left-0 right-0 h-[4px] bg-white" />
                     
                 </div>
-                <img className="absolute bottom-3 right-0 z-20 h-[240px] w-fit" src={pic} alt="Racer Picture" />
-            </div>
+                <img className="absolute bottom-3 right-0 z-20 h-[240px] w-fit" src={pic} 
+                    onError={(e) => {
+                        e.currentTarget.src = defaultPic;
+                    }}
+                    alt="Racer Picture" />
+                </div>
         </div>
     );
     };

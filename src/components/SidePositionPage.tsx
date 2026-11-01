@@ -120,6 +120,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
   useEffect(() => {
     bannerDisplayRef.current = 
                   control.custom ? 'custom' :
+                  flag === 3 ? 'finish' :
                   control.start ? 'start' :
                   control.finish ? 'finish' :
                   control.ltg ? 'ltg' :
@@ -128,7 +129,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
     // if(lapsToGo === 0 ){
     //   setBannerDisplay("finish");
     // }
-  }, [customBanner, control.start, control.finish, control.laps, control.ltg, lapsToGo, laps]);
+  }, [customBanner, control.start, control.finish, control.laps, control.ltg, lapsToGo, laps, flag]);
   
   // --------------------------------------------------------------------------------------------------
   const finishFlagUrl = new URL('../img/finish-flah-blue.png', import.meta.url).href;
@@ -184,15 +185,13 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
           </div> */}
           <div className="flex flex-col items-start justify-center w-fit p-3 bgbiruYamaha h-full">
             <h1 className="text-2xl font-black tracking-tighter uppercase text-zinc-100 leading-tight">
-              {raceTitle}
-              {false && "Yamaha Cup Race Seri 2 2026 / DF250 TMAX - XMAX - MAXI BORE UP"}
+              {raceTitle.length > 1 ? raceTitle : "shell blu cru yamaha enduro challenge seri 1"}
             </h1>
           </div>
           
           <div className="flex flex-col w-fit bg-white items-start justify-center px-12 h-full">
             <h1 className="text-2xl font-black uppercase textbiruYamaha">
-              {groupName}
-              {false && "DF250 TMAX - XMAX - MAXI BORE UP"}
+              {groupName.length > 1 ? groupName : "WR155 HOBBY"}
             </h1>
           </div>
           {/* <div className="col-end-3 flex flex-col w-fit bg-white items-start justify-center px-12 py-2 h-full">
@@ -301,7 +300,6 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                   <h1 className={`text-3xl numberFont text-black tracking-wider uppercase mx-auto`}>Finish</h1>
                 )}
                 {control.laps && flag !== 3 && !control.ltg && lapsToGo !==1 && !control.start &&  (
-
                   <div className="h-min  tracking-wide">
 
                     {true && (<div className="text-2xl text-black numberFont leading-none">
@@ -319,8 +317,8 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
 
                 {control.ltg && flag !== 3 && (!control.start && !control.finish) && (
                   <div className="h-min w-full">
-                    {(lapsToGo === 1 )? (
-                    <div className="text-3xl numberFont text-black leading-none">
+                    {(lapsToGo === 0)? 
+                    (<div className="text-3xl numberFont text-black leading-none">
                       LAST LAP
                     </div>) : (
                     <div className="flex items-center text-3xl ml-1 gap-2 font-bold uppercase text-black numberFont leading-none">
@@ -402,9 +400,9 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                       const isRecentlyChanged = rider.changeTime && Date.now() - rider.changeTime < 1300;
                       const flashClass = !isDnf && isRecentlyChanged
                         ? rider.changeDirection === 'up'
-                          ? 'border-x-2 pointer border-l-emerald-600 border-r-emerald-600'
+                          ? 'border-l-6 pointer border-l-emerald-600'
                           : rider.changeDirection === 'down'
-                          ? 'border-x-2 pointer border-l-red-500 border-r-red-500'
+                          ? 'border-l-6 pointer border-l-red-500'
                           : ''
                         : '';
 
@@ -879,15 +877,15 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                         timingWide = 110;
                       } else if (activeTimingMode === 'lastLap') {
                         timingContent = (
-                          <div className="h-full text-nowrap uppercase font-bold text-xl text-zinc-200 tracking-tight leading-none flex items-center justify-end">
-                            {(rider.lsTm !== "IN PIT" && isLeader) && (<span className="font-extrabold text-md tracking-wider uppercase text-zinc-200 mr-2">LAST</span>)}
+                          <div className="h-full text-nowrap uppercase font-mono font-bold text-xl text-zinc-200 tracking-tight leading-none flex items-center justify-end">
+                            {(rider.lsTm !== "IN PIT" && isLeader) && (<span className="font-extrabold font-sans text-md tracking-wider uppercase text-zinc-200 mr-2">LAST</span>)}
                             {rider.lsTm === "IN PIT" ? <span className="font-extrabold text-md tracking-wider uppercase text-zinc-200">IN PIT</span> : rider.lsTm || '-'}
                           </div>
                         );
                         timingWide = 200;
                       } else if (activeTimingMode === 'gap') {
                         timingContent = (
-                          <div className="h-full text-nowrap uppercase font-bold text-xl text-zinc-200 tracking-tight leading-none flex items-center justify-end">
+                          <div className="h-full text-nowrap uppercase font-mono font-bold text-xl text-zinc-200 tracking-tight leading-none flex items-center justify-end">
                             {isDnf ? '-' : (isLeader ? (
                               <span className="font-extrabold text-md tracking-wider uppercase text-zinc-200">GAP</span>
                             ) : (
@@ -898,7 +896,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                         timingWide = 130;
                       } else if (activeTimingMode === 'interval') {
                         timingContent = (
-                          <div className="h-full text-nowrap uppercase font-bold text-xl text-zinc-200 tracking-tight leading-none flex items-center justify-end">
+                          <div className="h-full text-nowrap uppercase font-mono font-bold text-xl text-zinc-200 tracking-tight leading-none flex items-center justify-end">
                             {isDnf ? '-' : (isLeader ? (
                               <span className="font-extrabold text-md tracking-wider uppercase text-zinc-200">INTERVAL</span>
                             ) : (
@@ -924,15 +922,20 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                       const parsedName = fitName(rider.nam);
                       const containerStyle = `py-2`;
                       const container1 = isLeader
-                        ? 'bgbiruYamaha border-l-2 border-cyan-400 border-b-2 border-t-2 shadow-[0_0_12px_rgba(0,229,255,0.15)]'
+                        ? 'bgbiruYamaha border-l-4 border-cyan-400 border-b-2 border-t-2 shadow-[0_0_12px_rgba(0,229,255,0.15)]'
                         : false
                         ? 'bg-slate-800/80 border-amber-400'
-                        : 'bgbiruYamaha border-l-2 border-slate-400 border-b-1';
+                        : 'bgbiruYamaha border-l-4 border-slate-400 border-b-1';
                       const container2 = isLeader
                         ? 'bgbiruYamaha border-cyan-400 border-b-2 border-t-2'
                         : false
                         ? 'bg-slate-800/80 border-amber-400'
                         : 'bgbiruYamaha border-slate-400 border-b-1';
+                      const container3 = isLeader
+                        ? 'bgbiruYamaha border-cyan-400 border-b-2 border-t-2 border-r-2'
+                        : false
+                        ? 'bg-slate-800/80 border-amber-400'
+                        : 'bgbiruYamaha border-slate-400 border-b-1 border-r-1';
 
                       return (
                         <motion.div
@@ -1054,7 +1057,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                         </div>
                         
                         {/* INFORMATION TIMING & GAP / DIFF COLUMNS (Slides from behind racer name) */}
-                        <div className={`relative z-10 overflow-hidden h-10 flex items-center justify-end shrink-0 ${container2}`}>
+                        <div className={`relative z-10 overflow-hidden h-10 flex items-center justify-end shrink-0 ${container3}`}>
                           <AnimatePresence>
                             {/* {shouldShowForThisRider && (
                               <motion.div
@@ -1071,7 +1074,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                             <motion.div
                               animate={{ width: shouldShowForThisRider ? timingWide : 0 }}
                               transition={{ duration: 0.4, ease: 'easeInOut', delay: shouldShowForThisRider ? 0 : 0.2 }}
-                              className="h-12 rounded-lg overflow-hidden flex items-center shadow-lg"
+                              className="h-12 rounded-lg flex overflow-hidden flex justify-end items-center shadow-lg"
                             >
                               {/* <div className="w-[300px] p-5 shrink-0 flex items-center gap-3">
                                 {timingContent}

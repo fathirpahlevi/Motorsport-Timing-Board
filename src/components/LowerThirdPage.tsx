@@ -222,7 +222,7 @@ export const LowerThirdPage: React.FC<LowerThirdPageProps> = ({
                             case 'lastLap':
                               return (
                                 <div className="flex items-center gap-2 truncate">
-                                  <span className="text-[10px] font-mono font-bold text-cyan-400 uppercase tracking-widest px-1.5 py-0.5 rounded bg-cyan-400/10 border border-cyan-400/30">
+                                  <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest px-1.5 py-0.5 rounded ">
                                     LAST LAP
                                   </span>
                                   <span className="text-lg font-mono font-black tracking-wider text-white truncate">
@@ -234,9 +234,9 @@ export const LowerThirdPage: React.FC<LowerThirdPageProps> = ({
                               const gapText = formatDeltaTime(rider.gp, isLeader);
                               return (
                                 <div className="flex items-center gap-2 truncate">
-                                  <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-400/10 border border-emerald-400/30">
+                                  {gapText !== "LEADER" && <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest px-1.5 py-0.5">
                                     GAP
-                                  </span>
+                                  </span>}
                                   <span className="text-lg font-mono font-black tracking-wider text-white truncate">
                                     {gapText}
                                   </span>
@@ -247,9 +247,9 @@ export const LowerThirdPage: React.FC<LowerThirdPageProps> = ({
                               const intText = formatDeltaTime(rider.df, isLeader);
                               return (
                                 <div className="flex items-center gap-2 truncate">
-                                  <span className="text-[10px] font-mono font-bold text-blue-400 uppercase tracking-widest px-1.5 py-0.5 rounded bg-blue-400/10 border border-blue-400/30">
+                                  {intText !== "LEADER" && <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest px-1.5 py-0.5 rounded">
                                     INTERVAL
-                                  </span>
+                                  </span>}
                                   <span className="text-lg font-mono font-black tracking-wider text-white truncate">
                                     {intText}
                                   </span>
