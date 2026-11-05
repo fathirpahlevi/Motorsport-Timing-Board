@@ -9,6 +9,7 @@ import { HubConnectionBuilder, HubConnection } from "@microsoft/signalr";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import { INITIAL_WEATHER_STATE } from "./src/weatherData";
+import { getLocalIpAddresses, getPrimaryLocalIp } from './utils/network';
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -138,6 +139,16 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
+  app.get('/api/network-info', (req, res) => {
+    const primaryIp = getPrimaryLocalIp();
+    const allInterfaces = getLocalIpAddresses();
+
+    res.json({
+      primaryIp,
+      accessUrl: primaryIp ? `http://${primaryIp}:${PORT}` : `http://localhost:${PORT}`,
+      interfaces: allInterfaces,
+    });
+  });
   // Multimodal Gemini endpoint to convert screenshots of starting grid
   app.post("/api/extract-starting-grid", async (req, res) => {
     try {
@@ -1099,6 +1110,14 @@ async function startServer() {
 
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
+    const primaryIp = getPrimaryLocalIp();
+    if (primaryIp) {
+      console.log(` Server accessible on LAN at: http://${primaryIp}:${PORT}`);
+      console.log(` Main Control Page for LAN at: http://${primaryIp}:${PORT}/control`);
+      console.log(` Main Control Page for local loopback at: http://127.0.0.1:${PORT}/control`);
+    } else {
+      console.log(` Warning: No active LAN network interfaces found.`);
+    }
     if (savedID.sessionId) {
       console.log(`[WS Server] Auto-reconnecting saved session on startup: ${savedID.sessionId}`);
       startOrReconnectSignalRSession(savedID.sessionId, savedID.eventId || undefined);

@@ -303,6 +303,36 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
         socket.send(JSON.stringify(payload));
         setLocalStatus(`Sent: ${obj}`);
     }
+    async function networkInfo  () {
+        try{
+            const res = await fetch('/api/network-info');
+            if (!res.ok) {
+                return false;
+            }
+
+            const data = await res.json();
+            // if(data)console.log("Network ", data);
+            return data;
+        }
+        catch(err){
+            console.error("Error fetching network info:", err);
+            return false;
+        }
+    };
+    // const networkData = networkInfo();
+    // if(networkData)console.log("Network data fetched", networkData);
+    // console.log("Primary IP Address:", networkData?.primaryIp);
+    const networkData = useRef<{ primaryIp: string | null; accessUrl: string | null; interfaces: { interfaceName: string; address: string }[] } | null>(null);
+
+    useEffect(() => {
+        if(!networkData.current){
+            networkInfo().then((data) => {
+                networkData.current = data;
+                console.log("Network data fetched", networkData.current);
+            });
+        }
+    },[]);
+    const [interfaceSel, setInterfaceSel] = useState<number>(0);
     return (
     <div className='flex flex-col gap-2'>
         <div className="max-w lg:w-5xl mx-auto p-6 bg-white rounded-xl shadow-md border border-gray-100 text-center font-sans">
@@ -316,14 +346,37 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
                 {connectionStatus === 'connected' ? '● Connected' : '● Offline'}
                 </span>
             </div>
-            <div className="w-full flex flex-col text-left mb-6">
-                <h1 className="text-xl font-bold text-gray-800 ">Race Information</h1>
-                <h2 className="text-lg text-gray-800 ">Event Name: <span className="text-lg font-bold text-gray-900">{raceTitle}</span></h2>
-                <h2 className="text-lg text-gray-800 ">Group Name: <span className="text-lg font-bold text-gray-900">{groupName}</span></h2>
-                <h2 className="text-lg text-gray-800 ">Session Name: <span className="text-lg font-bold text-gray-900">{sessionName}</span></h2>
-                <h2 className="text-lg text-gray-800 ">Race Laps: <span className="text-lg font-bold text-gray-900">{globalRaceLaps}</span></h2>
-                <h2 className="text-lg text-gray-800 ">Lap: <span className="text-lg font-bold text-gray-900">{globalLaps}</span></h2>
-                <h2 className="text-lg text-gray-800 ">Laps to Go: <span className="text-lg font-bold text-gray-900">{globalLtg}</span></h2>
+            <div className="w-full flex flex-row justify-between mb-6">
+                <div className="flex flex-col text-left">
+                    <h1 className="text-xl font-bold text-gray-800 ">Race Information</h1>
+                    <h2 className="text-lg text-gray-800 ">Event Name: <span className="text-lg font-bold text-gray-900">{raceTitle}</span></h2>
+                    <h2 className="text-lg text-gray-800 ">Group Name: <span className="text-lg font-bold text-gray-900">{groupName}</span></h2>
+                    <h2 className="text-lg text-gray-800 ">Session Name: <span className="text-lg font-bold text-gray-900">{sessionName}</span></h2>
+                    <h2 className="text-lg text-gray-800 ">Race Laps: <span className="text-lg font-bold text-gray-900">{globalRaceLaps}</span></h2>
+                    <h2 className="text-lg text-gray-800 ">Lap: <span className="text-lg font-bold text-gray-900">{globalLaps}</span></h2>
+                    <h2 className="text-lg text-gray-800 ">Laps to Go: <span className="text-lg font-bold text-gray-900">{globalLtg}</span></h2>
+                </div>
+                <div className="flex flex-col text-right">
+                    <h1 className="text-xl font-bold text-gray-800 ">Server Network IP Address</h1>
+                    <div className="text-right">
+                        <h2 className="text-lg text-gray-800 ">Primary IP: <span className="text-lg font-bold text-gray-900">{networkData.current?.primaryIp || '-'}</span></h2>
+                        <h2 className="text-lg text-gray-800 ">Server Access URL: <span className="text-lg font-bold text-gray-900">{interfaceSel != 0 ? 'http://' + networkData.current?.interfaces[interfaceSel - 1].address + ':3000' || '-' : networkData.current?.accessUrl || '-'}</span></h2>
+                        <h2 className="text-lg text-black font-semibold mr-10">Interfaces addresses:</h2>
+                        {(networkData.current?.interfaces && networkData.current?.interfaces.length > 0) ? <div className="flex flex-col justify-end items-end w-fit ml-auto">
+                            {networkData.current?.interfaces.map((data, index) => (
+                                <div key={index} className="flex flex-row gap-1">
+                                    <h3 className="text-md text-gray-800 ">{data.interfaceName}: <span className="text-md font-bold text-gray-900">{data.address || '-'}</span></h3>
+                                    <button 
+                                        onClick={() => setInterfaceSel(index + 1)}
+                                        className={`p-3 my-0.5 ${interfaceSel === index + 1 ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'} hover:cursor-pointer`}
+                                    >
+                                    </button>
+                                </div>
+                            ))}
+                        </div> : <h2 className="text-lg text-gray-800 ">No active interfaces found</h2>}
+                    </div>
+                
+                </div>
             </div>
 
             <div className='grid grid-cols-3 gap-5 mb-7'>
@@ -791,92 +844,153 @@ export const DisplayController: React.FC<DisplayControllerProps> = ({
                 <span className="text-xs uppercase tracking-wider text-zinc-950 font-extrabold block">
                     Broadcast Overlays & Controllers
                 </span>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
-                    <a
-                        href="/lowerthirdcontrol"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-2.5 bg-amber-400 text-zinc-950 font-bold rounded-lg text-center hover:bg-amber-300 transition-colors uppercase"
-                    >
-                        Lower Third Control
-                    </a>
-                    <a
-                        href="/weathercontrol"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-2.5 bg-cyan-400 text-zinc-950 font-bold rounded-lg text-center hover:bg-cyan-300 transition-colors uppercase"
-                    >
-                        Weather Control
-                    </a>
-                    <a
-                        href="/manual"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
-                    >
-                        Manual Control
-                    </a>
-                    <a
-                        href="/"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
-                    >
-                        Leaderboard Page
-                    </a>
+                <div className="fixed"><br></br></div>
+                <div className="grid grid-cols-2 sm:grid-cols-2 gap-2 text-xs font-mono">
+                    <div className="flex flex-col gap-1.5">
+                        <a
+                            href="/lowerthirdcontrol"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-2.5 bg-amber-400 text-zinc-950 font-bold rounded-lg text-center hover:bg-amber-300 transition-colors uppercase"
+                        >
+                            Lower Third Control
+                        </a>
+                        <span className="text-zinc-600">
+                            {interfaceSel != 0 ? 'http://' + networkData.current?.interfaces[interfaceSel - 1].address + ':3000' || '-' : networkData.current?.accessUrl || '-'}/lowerthirdcontrol
+                        </span>
+                    </div>
+                    <div className="fixed"><br></br></div>
+                    <div className="flex flex-col gap-1.5">
+                        <a
+                            href="/weathercontrol"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-2.5 bg-cyan-400 text-zinc-950 font-bold rounded-lg text-center hover:bg-cyan-300 transition-colors uppercase"
+                        >
+                            Weather Control
+                        </a>
+                        <span className="text-zinc-600">
+                            {interfaceSel != 0 ? 'http://' + networkData.current?.interfaces[interfaceSel - 1].address + ':3000' || '-' : networkData.current?.accessUrl || '-'}/weathercontrol
+                        </span>
+                    </div>
+                    <div className="fixed"><br></br></div>
+                    <div className="flex flex-col gap-1.5">
+                        <a
+                            href="/manual"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
+                        >
+                            Manual Control
+                        </a>
+                        <span className="text-zinc-600">
+                            {interfaceSel != 0 ? 'http://' + networkData.current?.interfaces[interfaceSel - 1].address + ':3000' || '-' : networkData.current?.accessUrl || '-'}/manual
+                        </span>
+                    </div>
+                    <div className="fixed"><br></br></div>
+                    <div className="flex flex-col gap-1.5">
+                        <a
+                            href="/"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
+                        >
+                            Leaderboard Page
+                        </a>
+                        <span className="text-zinc-600">
+                            {interfaceSel != 0 ? 'http://' + networkData.current?.interfaces[interfaceSel - 1].address + ':3000' || '-' : networkData.current?.accessUrl || '-'}/
+                        </span>
+                    </div>
                 </div>
-                 <span className="text-xs uppercase tracking-wider text-zinc-950 font-extrabold block">
+                <div className="fixed"><br></br></div>
+                <span className="text-xs uppercase tracking-wider text-zinc-950 font-extrabold block">
                     Overlay Pages
                 </span>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
-                    <a
-                        href="/sideposition"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
-                    >
-                        Side Position
-                    </a>
-                    <a
-                        href="/startinggrid"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
-                    >
-                        Starting Grid
-                    </a>
-                    <a
-                        href="/result"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
-                    >
-                        Result Page
-                    </a>
-                    <a
-                        href="/trophy"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
-                    >
-                        Awarding
-                    </a>
-                    <a
-                        href="/lowerthird"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
-                    >
-                        Lower Third
-                    </a>
-                    <a
-                        href="/weather"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
-                    >
-                        Weather
-                    </a>
+                <div className="fixed"><br></br></div>
+                <div className="grid grid-cols-2 sm:grid-cols-2 gap-2 text-xs font-mono">
+                    <div className="flex flex-col gap-1.5">
+                        <a
+                            href="/sideposition"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
+                        >
+                            Side Position
+                        </a>
+                        <span className="text-zinc-600">
+                            {interfaceSel != 0 ? 'http://' + networkData.current?.interfaces[interfaceSel - 1].address + ':3000' || '-' : networkData.current?.accessUrl || '-'}/sideposition
+                        </span>
+                    </div>
+                    <div className="fixed"><br></br></div>
+                    <div className="flex flex-col gap-1.5">
+                        <a
+                            href="/startinggrid"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
+                        >
+                            Starting Grid
+                        </a>
+                        <span className="text-zinc-600">
+                            {interfaceSel != 0 ? 'http://' + networkData.current?.interfaces[interfaceSel - 1].address + ':3000' || '-' : networkData.current?.accessUrl || '-'}/startinggrid
+                        </span>
+                    </div>
+                    <div className="fixed"><br></br></div>
+                    <div className="flex flex-col gap-1.5">
+                        <a
+                            href="/result"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
+                        >
+                            Result Page
+                        </a>
+                        <span className="text-zinc-600">
+                            {interfaceSel != 0 ? 'http://' + networkData.current?.interfaces[interfaceSel - 1].address + ':3000' || '-' : networkData.current?.accessUrl || '-'}/result
+                        </span>
+                    </div>
+                    <div className="fixed"><br></br></div>
+                    <div className="flex flex-col gap-1.5">
+                        <a
+                            href="/trophy"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
+                        >
+                            Awarding
+                        </a>
+                        <span className="text-zinc-600">
+                            {interfaceSel != 0 ? 'http://' + networkData.current?.interfaces[interfaceSel - 1].address + ':3000' || '-' : networkData.current?.accessUrl || '-'}/trophy
+                        </span>
+                    </div>
+                    <div className="fixed"><br></br></div>
+                    <div className="flex flex-col gap-1.5">
+                        <a
+                            href="/lowerthird"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
+                        >
+                            Lower Third
+                        </a>
+                        <span className="text-zinc-600">
+                            {interfaceSel != 0 ? 'http://' + networkData.current?.interfaces[interfaceSel - 1].address + ':3000' || '-' : networkData.current?.accessUrl || '-'}/lowerthird
+                        </span>
+                    </div>
+                    <div className="fixed"><br></br></div>
+                    <div className="flex flex-col gap-1.5">
+                        <a
+                            href="/weather"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-2.5 bg-zinc-800 text-white font-bold rounded-lg text-center hover:bg-zinc-700 transition-colors uppercase border border-zinc-700"
+                        >
+                            Weather
+                        </a>
+                        <span className="text-zinc-600">
+                            {interfaceSel != 0 ? 'http://' + networkData.current?.interfaces[interfaceSel - 1].address + ':3000' || '-' : networkData.current?.accessUrl || '-'}/weather
+                        </span>
+                    </div>
                 </div>
             </div>
 
