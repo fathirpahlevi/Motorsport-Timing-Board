@@ -35,7 +35,7 @@ export const TrophyPage: React.FC<RaceResultPageProps> = ({
   const goldMedal = new URL('../img/gold-medal.png', import.meta.url).href;
   const silverMedal = new URL('../img/silver-medal.png', import.meta.url).href;
   const bronzeMedal = new URL('../img/bronze-medal.png', import.meta.url).href;
-  const mainLogo = new URL('../img/logoYcr.png', import.meta.url).href;
+  const mainLogo = new URL('../img/logoYEC.png', import.meta.url).href;
 
   // Build unified list of finished racers
   let finishedRacers: Array<{
