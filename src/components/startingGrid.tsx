@@ -90,7 +90,7 @@
     const ROW_HEIGHT_PX = 52;
     const sidebarTranslateY = -(pageIndex * 2 * ROW_HEIGHT_PX); // Shifts 2 rows up per page
 
-    const mainLogo = new URL('../img/logoYcr.png', import.meta.url).href;
+    const mainLogo = new URL('../img/logoYEC.png', import.meta.url).href;
     const defaultPic = new URL('../img/racer-silhouette.png', import.meta.url).href;
     
 
