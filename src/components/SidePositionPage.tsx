@@ -185,7 +185,8 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
           </div> */}
           <div className="flex flex-col items-start justify-center w-fit p-3 bgbiruYamaha h-full">
             <h1 className="text-2xl font-black tracking-tighter uppercase text-zinc-100 leading-tight">
-              {raceTitle.length > 1 ? raceTitle : "shell blu cru yamaha enduro challenge seri 3"}
+              {/* {raceTitle.length > 1 ? raceTitle : "shell blu cru yamaha enduro challenge seri 3"} */}
+              shell blu cru yamaha enduro challenge seri 3
             </h1>
           </div>
           
@@ -209,7 +210,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -310 }}
               transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="my-2 w-fit flex bg-black/95 items-center justify-start h-full p-2 px-7"
+              className="my-2 top-15 fixed w-fit flex bg-black/95 items-center justify-start h-fit p-2 px-7"
               >
               {/* {control.laps && !control.ltg && (
                 <div className="text-3xl font-bold italic text-zinc-200 font-sans leading-none">
@@ -349,7 +350,9 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
     {true && (
       <main className="flex-1 max-w-7xl w-full flex flex-col relative z-40 animate-fade-in overflow-hidden " id="main-content">
         {/* Video Overlay Stream Viewport */}
-        {control.video && (<p className='text-zinc-100/90 tracking-wider text-xl uppercase font-bold absolute left-85 top-2 z-40'>LIVE</p>)}
+        {control.video && control.rtmp && rtmpConnectionRef.current === 'playing' && (
+          <p className='text-zinc-100/90 tracking-wider text-xl uppercase font-bold absolute left-85 top-2 z-40'>LIVE</p>
+        )}
         <div className={`${control.video && control.rtmp && rtmpConnectionRef.current === 'playing' ? '' : 'hidden'} z-20 ml-8.5 w-[380px] bg-zinc-100 p-1 overflow-hidden font-sans`}>
           {streamRef.current.length > 0 && (
           <WebRTCVideoPlayer 
@@ -941,8 +944,12 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                         <motion.div
                           layoutId={`rider-row-${rider.id}`}
                           key={rider.id}
-                          className={`w-full flex items-center flex-row border-transparent relative`}
+                          className={`w-full flex items-center flex-row border-transparent relative duration-200 ease-in-out ${showBanner ? 'translate-y-17' : ''}`}
                           id={`rider-row-${rider.id}`}
+                          initial={{ opacity: 0, x: -5  }}
+                          exit={{ opacity: 0, x: -5, transition: { duration: 0.3 }  }}
+                          animate={{ opacity: 1, x: 0, transition: { delay: 0.3 } }}
+                          transition={{ duration: 0, ease: 'easeInOut' }}
                           onClick={() => {
                             if (setSelectedRiderId) {
                               setSelectedRiderId(rider.id === selectedRiderId ? null : rider.id);

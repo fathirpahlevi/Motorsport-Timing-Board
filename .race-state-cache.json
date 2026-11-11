@@ -1,27 +1,18 @@
 {
   "savedID": {
-    "eventId": "CBOCNDLQ-2147483815",
-    "sessionId": "CBOCNDLQ-2147483815-1073742168"
+    "eventId": "OVXRNRVR-2147487273",
+    "sessionId": "OVXRNRVR-2147487273-1073749669"
   },
-  "speedhiveUrl": "https://speedhive.mylaps.com/livetiming/CBOCNDLQ-2147483815/sessions/CBOCNDLQ-2147483815-1073742168",
+  "speedhiveUrl": "https://speedhive.mylaps.com/livetiming/OVXRNRVR-2147487273/sessions/OVXRNRVR-2147487273-1073749669",
   "isManualMode": false,
   "manualRiders": [],
-  "manualOverrides": {
-    "12745314": {
-      "pic": "/api/racer-image/racer-id-12745314.png?t=1794375953177"
-    },
-    "grid-rider-1794369973541-0-e1ecva": {
-      "pic": "/api/racer-image/racer-1.png?t=1794375590399"
-    },
-    "TB075": {
-      "pic": "/api/racer-image/racer-id-TB075.png?t=1794375816976"
-    }
-  },
+  "manualOverrides": {},
   "lowerThird": {
     "visible": false,
     "position": "left",
     "selectedRiderIds": [
-      "grid-rider-1794369973541-0-e1ecva"
+      "145",
+      "26"
     ],
     "infoMode": "team"
   },
@@ -273,16 +264,23 @@
         ]
       }
     },
-    "lastUpdated": "11.33.27"
+    "lastUpdated": "18.16.13"
   },
   "sessionInfo": {
-    "eNam": "MOTORCENTER NORWAY EVENT",
-    "rnNam": "Heat  2",
-    "gNam": "MotorcenterNorway",
-    "btLpTim": "2:08.801",
-    "ls": 6,
+    "eNam": "Rookie Race",
+    "rnNam": "Race-2",
+    "gNam": "SENIOR ROOKIE CUP",
+    "btLpTim": "1:13.109",
+    "ls": 11,
     "lsTg": 0,
-    "f": 0
+    "f": 3
   },
-  "controlAction": {}
+  "controlAction": {
+    "position": true,
+    "video": false,
+    "finish": false,
+    "start": false,
+    "timingVisible": false,
+    "time": false
+  }
 }

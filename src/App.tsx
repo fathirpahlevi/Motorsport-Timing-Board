@@ -1347,6 +1347,7 @@ export default function App() {
 
     setAutoSimulate(false); // disable simulator on real speedhive load
     resetSessionRiders(sessionId);
+    
 
     // Notify backend WebSocket proxy to switch to this URL
     if (connectionRef.current && connectionRef.current.readyState === WebSocket.OPEN) {
