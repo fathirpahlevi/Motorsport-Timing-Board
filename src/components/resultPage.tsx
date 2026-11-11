@@ -143,7 +143,7 @@ export const RaceResultPage: React.FC<RaceResultPageProps> = ({
                   <h1 className="text-4xl numberFont mx-auto uppercase tracking-widest text-white print:text-black">Results</h1>
                   <div className="w-full p-2 bg-gradient-to-r from-zinc-100 via-zinc-100 to-zinc-100/0">
                     <h1 className="text-xl font-black italic uppercase tracking-tight text-blue-900 print:text-black">
-                      {displayEventName.length > 1 ? displayEventName : 'shell blu cru yamaha enduro challenge seri 1'}
+                      {displayEventName.length > 1 ? displayEventName : 'shell blu cru yamaha enduro challenge seri 3'}
                     </h1>
                   </div>
                 </div>

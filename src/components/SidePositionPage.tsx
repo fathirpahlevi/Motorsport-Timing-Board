@@ -185,7 +185,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
           </div> */}
           <div className="flex flex-col items-start justify-center w-fit p-3 bgbiruYamaha h-full">
             <h1 className="text-2xl font-black tracking-tighter uppercase text-zinc-100 leading-tight">
-              {raceTitle.length > 1 ? raceTitle : "shell blu cru yamaha enduro challenge seri 1"}
+              {raceTitle.length > 1 ? raceTitle : "shell blu cru yamaha enduro challenge seri 3"}
             </h1>
           </div>
           

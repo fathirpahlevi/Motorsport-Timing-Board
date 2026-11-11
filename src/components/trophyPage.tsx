@@ -91,7 +91,7 @@ export const TrophyPage: React.FC<RaceResultPageProps> = ({
       {(finishedRacers.length > 0) && (
       <div className="w-fit flex text-center">
         <div className="flex flex-wrap justify-center items-start pt-6 gap-10 text-zinc-900">
-          <div className='mt-30'>
+          <div className='mt-16'>
             <div className='flex flex-row items-end'>
               <div className='ml-6 flex flex-row items-start'>
                 <h1 className='numberFont mb-1 text-9xl text-zinc-100'>4</h1>
@@ -102,7 +102,7 @@ export const TrophyPage: React.FC<RaceResultPageProps> = ({
                 <div className="bg-blue-800/70 h-auto w-40 flex justify-center items-end text-zinc-100 font-bold text-2xl">{finishedRacers[3] ? finishedRacers[3].time :'--:--'}</div>
               </div>
             </div>
-            <div className="w-100 flex flex-col">
+            <div className="w-120 flex flex-col">
               <div className="w-full py-3 bg-blue-800 flex flex-col items-center">
                 <h2 className="text-zinc-100 uppercase font-bold text-3xl">{finishedRacers[3] ? finishedRacers[3].name : '-'}</h2>
               </div>
@@ -112,7 +112,7 @@ export const TrophyPage: React.FC<RaceResultPageProps> = ({
               </div>
             </div>
           </div>
-          <div className='mt-15'>
+          <div className='mt-8'>
             <div className='flex flex-row items-end'>
               <div className='ml-6 flex flex-row items-start'>
                 <h1 className='numberFont mb-1 text-9xl text-zinc-100'>2</h1>
@@ -124,7 +124,7 @@ export const TrophyPage: React.FC<RaceResultPageProps> = ({
                 <div className="bg-blue-800/70 h-auto w-40 flex justify-center items-end text-zinc-100 font-bold text-2xl">{finishedRacers[1] ? finishedRacers[1].time : '--:--'}</div>
               </div>
             </div>
-            <div className="w-100 flex flex-col">
+            <div className="w-120 flex flex-col">
               <div className="w-full py-3 bg-blue-800 flex flex-col items-center">
                 <h2 className="text-zinc-100 uppercase font-bold text-3xl">{finishedRacers[1] ? finishedRacers[1].name : '-'}</h2>
               </div>
@@ -146,7 +146,7 @@ export const TrophyPage: React.FC<RaceResultPageProps> = ({
                 <div className="bg-blue-800/70 h-auto w-40 flex justify-center items-end text-zinc-100 font-bold text-2xl">{finishedRacers[0] ? finishedRacers[0].time : '--:--'}</div>
               </div>
             </div>
-            <div className="w-100 flex flex-col">
+            <div className="w-120 flex flex-col">
               <div className="w-full py-3 bg-blue-800 flex flex-col items-center">
                 <h2 className="text-zinc-100 uppercase font-bold text-3xl">{finishedRacers[0] ? finishedRacers[0].name : '-'}</h2>
               </div>
@@ -156,7 +156,7 @@ export const TrophyPage: React.FC<RaceResultPageProps> = ({
               </div>
             </div>
           </div>
-          <div className='mt-15'>
+          <div className='mt-8'>
             <div className='flex flex-row items-end'>
               <div className='ml-6 flex flex-row items-start'>
                 <h1 className='numberFont mb-1 text-9xl text-zinc-100'>3</h1>
@@ -168,7 +168,7 @@ export const TrophyPage: React.FC<RaceResultPageProps> = ({
                 <div className="bg-blue-800/70 h-auto w-40 flex justify-center items-end text-zinc-100 font-bold text-2xl">{finishedRacers[2] ? finishedRacers[2].time : '--:--'}</div>
               </div>
             </div>
-            <div className="w-100 flex flex-col">
+            <div className="w-120 flex flex-col">
               <div className="w-full py-3 bg-blue-800 flex flex-col items-center">
                 <h2 className="text-zinc-100 uppercase font-bold text-3xl">{finishedRacers[2] ? finishedRacers[2].name : '-'}</h2>
               </div>
@@ -179,7 +179,7 @@ export const TrophyPage: React.FC<RaceResultPageProps> = ({
               </div>
             </div>
           </div>
-          <div className='mt-30'>
+          <div className='mt-16'>
             <div className='flex flex-row items-end'>
               <div className='ml-6 flex flex-row items-start'>
                 <h1 className='numberFont mb-1 text-9xl text-zinc-100'>5</h1>
@@ -190,7 +190,7 @@ export const TrophyPage: React.FC<RaceResultPageProps> = ({
                 <div className="bg-blue-800/70 h-auto w-40 flex justify-center items-end text-zinc-100 font-bold text-2xl">{finishedRacers[4] ? finishedRacers[4].time : '--:--'}</div>
               </div>
             </div>
-            <div className="w-100 flex flex-col">
+            <div className="w-120 flex flex-col">
               <div className="w-full py-3 bg-blue-800 flex flex-col items-center">
                 <h2 className="text-zinc-100 uppercase font-bold text-3xl">{finishedRacers[4] ? finishedRacers[4].name : '-'}</h2>
               </div>

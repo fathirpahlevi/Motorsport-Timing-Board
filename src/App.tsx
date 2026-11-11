@@ -1695,7 +1695,7 @@ export default function App() {
           path="/startingGrid"
           element={
               <StartingGrid 
-              circuitTitle='SIRKUIT LANUD SUTAN SJAHRIR'
+              circuitTitle='Lapangan Pacuan Kuda'
               racers={riders}
               activePageIndex={startingGridPage}
               pages={handleGridPages}

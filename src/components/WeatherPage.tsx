@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sun, 
@@ -76,9 +76,16 @@ export const WeatherPage: React.FC<WeatherPageProps> = ({ weatherState = INITIAL
   const precipProbMax = daily?.precipitation_probability_max?.[0] ?? '--';
   const sunriseTime = daily?.sunrise?.[0] ? daily.sunrise[0].split('T')[1] : '--:--';
   const sunsetTime = daily?.sunset?.[0] ? daily.sunset[0].split('T')[1] : '--:--';
+  const [refreshed, setRefreshed] = useState(true);
 
+  useEffect(() => {
+    setTimeout(() => setRefreshed(false), 2000); // Reset refreshed state after 2 seconds
+  },[]);
   return (
     <div className="fixed inset-0 pointer-events-none bg-transparent overflow-hidden select-none font-sans">
+          {refreshed && (
+            <div className="fixed top-[50%] left-10 w-fit text-zinc-100 bg-blue-800 p-3 font-racing font-bold tracking-wider">Refreshed ...</div>
+          )}
       <AnimatePresence>
         {isVisible && (
           <motion.div

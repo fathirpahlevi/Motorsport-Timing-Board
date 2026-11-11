@@ -24,18 +24,19 @@
     }) => {
     const [pageIndex, setPageIndex] = useState(0);
     console.log("Page Index", pageIndex);
-    // Calculate total pages based on 6 racers per screen
-    const gridPages = Math.max(1, Math.ceil(racers.length / 6));
+    // Calculate total pages based on 9 racers per screen
+    const gridPages = Math.max(1, Math.ceil(racers.length / 9));
 
     // 1. Notify parent component safely using useEffect
     useEffect(() => {
         if (pages) pages(gridPages);
     }, [gridPages, pages]);
 
-    // Page chunking: Get 6 racers for current active screen
-    const pageRacers = racers.slice(pageIndex * 6, pageIndex * 6 + 6);
+    // Page chunking: Get 9 racers for current active screen
+    const pageRacers = racers.slice(pageIndex * 9, pageIndex * 9 + 9);
     const row1 = pageRacers.slice(0, 3);
     const row2 = pageRacers.slice(3, 6);
+    const row3 = pageRacers.slice(6, 9);
 
     const stairCase = ['mt-0', 'mt-3', 'mt-6'];
 
@@ -101,8 +102,8 @@
         <div className="flex flex-row">
             <img className="h-[140px] w-fit mb-5" src={mainLogo} alt="Logo" />
             <div className="ml-7 flex flex-col">
-            <div className="flex items-center gap-3 text-md font-bold tracking-wider text-slate-200">
-                <span className="font-extrabold uppercase">{raceTitle}</span>
+            <div className="flex items-center gap-3 text-xl font-bold tracking-wider text-slate-200">
+                <span className="font-extrabold uppercase">{raceTitle.length > 1 ? raceTitle : 'SHELL BLU CRU Yamaha Enduro Challenge Seri 3' }</span>
             </div>
             <div className="text-lg text-slate-300 font-semibold tracking-widest uppercase">
                 {circuitTitle}
@@ -114,9 +115,9 @@
             </div>
         </div>
 
-        <div className="text-lg text-slate-300 font-semibold tracking-widest uppercase">
+        {sessionName.length > 1 && <div className="text-lg text-slate-300 font-semibold tracking-widest uppercase">
             {groupName} : {sessionName}
-        </div>
+        </div>}
 
         {/* ================= MAIN CONTENT LAYOUT ================= */}
         <div className="flex items-stretch mt-8 bg-zinc-200/50 rounded-l-xl">
@@ -136,7 +137,7 @@
                     ) : (
                         racers.map((num, idx) => {
                             const racerNumber = num.no;
-                            const testPage = (idx < (pageIndex * 6 + 6)) && (idx >= ((pageIndex - 1) * 6 + 6));
+                            const testPage = (idx < (pageIndex * 9 + 9)) && (idx >= ((pageIndex - 1) * 9 + 9));
                             const isCurrentPageRacer = pageRacers.some((r) => String(r.no) === String(racerNumber));
                             const itemClass = stairCase[idx % 3];
 
@@ -180,8 +181,23 @@
                     </div>
 
                     {/* BOTTOM ROW (P4, P5, P6) */}
-                    <div className="grid grid-cols-3 gap-14 items-end mb-40">
+                    <div className="grid grid-cols-3 gap-14 items-end">
                     {row2.map((racer, index) => {
+                            // const pic = new URL(`../img/racer-${racer.lbpos}.png`, import.meta.url).href;
+                            return(
+                                <RacerCard
+                                key={racer.id || racer.pos || index}
+                                racer={racer}
+                                offsetIndex={index}
+                                pic={defaultPic}
+                                defaultPic={defaultPic}
+                                />
+                            )
+                        })}
+                    </div>
+                    {/* THIRD ROW (P7, P8, P9) */}
+                    <div className="grid grid-cols-3 gap-14 items-end">
+                        {row3.map((racer, index) => {
                             // const pic = new URL(`../img/racer-${racer.lbpos}.png`, import.meta.url).href;
                             return(
                                 <RacerCard
@@ -215,8 +231,8 @@
         offsetIndex === 0
         ? 'translate-y-0'
         : offsetIndex === 1
-        ? 'translate-y-20'
-        : 'translate-y-40';
+        ? 'translate-y-0'
+        : 'translate-y-0';
     
     const teamRacer = (racer.nam).split('/') || [];
     const nameParts = (racer.nam || '').split(' ');

@@ -39,6 +39,8 @@ export const LowerThirdPage: React.FC<LowerThirdPageProps> = ({
     if (propLowerThirdState) setLtState(propLowerThirdState);
   }, [propLowerThirdState]);
 
+  const [refreshed, setRefreshed] = useState(true);
+
   // Real-time WebSocket synchronization
   useEffect(() => {
     if (!socket) return;
@@ -77,7 +79,7 @@ export const LowerThirdPage: React.FC<LowerThirdPageProps> = ({
     const origHtmlBg = document.documentElement.style.backgroundColor;
     document.body.style.backgroundColor = 'transparent';
     document.documentElement.style.backgroundColor = 'transparent';
-
+    setTimeout(() => setRefreshed(false), 2000); // Reset refreshed state after 2 seconds
     return () => {
       document.body.style.backgroundColor = origBodyBg;
       document.documentElement.style.backgroundColor = origHtmlBg;
@@ -138,6 +140,9 @@ export const LowerThirdPage: React.FC<LowerThirdPageProps> = ({
       data-testid="lower-third-overlay"
       className="fixed inset-0 pointer-events-none z-50 bg-transparent overflow-hidden"
     >
+        {refreshed && (
+          <div className="fixed top-[50%] left-10 w-fit text-zinc-100 bg-blue-800 p-3 font-racing font-bold tracking-wider">Refreshed ...</div>
+        )}
       <div className={`absolute flex ${positionWrapperClass}`}>
         <div className={flexCardsClass}>
           <AnimatePresence mode="popLayout">

@@ -586,13 +586,6 @@
         <header className="border-b border-zinc-800 bg-zinc-900/90 backdrop-blur-md px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-0 z-40">
             
                 <div className="flex items-center gap-3">
-                <Link
-                    to="/"
-                    className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-800 px-4 py-2 rounded-lg transition-colors"
-                >
-                    <ArrowLeft className="w-4 h-4" /> Back to Console
-                </Link>
-                <div className="h-6 w-px bg-zinc-800 hidden sm:block"></div>
                 <h1 className="text-xl font-black italic tracking-tight uppercase text-white font-mono flex items-center gap-2">
                     <FileText className="w-5 h-5 text-blue-500" />
                     MANUAL TIMING DESK
