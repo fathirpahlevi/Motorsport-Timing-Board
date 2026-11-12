@@ -115,8 +115,8 @@
             </div>
         </div>
 
-        {sessionName.length > 1 && <div className="text-lg text-slate-300 font-semibold tracking-widest uppercase">
-            {groupName} : {sessionName}
+        {groupName.length > 1 && <div className="text-lg text-slate-300 font-semibold tracking-widest uppercase">
+            {groupName} : {sessionName.length > 1 ? sessionName : 'RACE'}
         </div>}
 
         {/* ================= MAIN CONTENT LAYOUT ================= */}
@@ -128,7 +128,7 @@
                     style={{
                     transform: `translateY(${sidebarTranslateY}px)`,
                     }}
-                    className="grid grid-cols-3 gap-y-6 gap-x-3 items-center mx-2 transition-transform duration-500 ease-in-out"
+                    className="pt-3 grid grid-cols-3 gap-y-6 gap-x-3 items-center mx-2 transition-transform duration-500 ease-in-out"
                 >
                     {racers.length === 0 ? (
                     <div className="text-zinc-900 flex flex-col gap-4 animate-pulse">
@@ -139,7 +139,7 @@
                             const racerNumber = num.no;
                             const testPage = (idx < (pageIndex * 9 + 9)) && (idx >= ((pageIndex - 1) * 9 + 9));
                             const isCurrentPageRacer = pageRacers.some((r) => String(r.no) === String(racerNumber));
-                            const itemClass = stairCase[idx % 3];
+                            const itemClass = 0;//stairCase[idx % 3]
 
                             return (
                             <div

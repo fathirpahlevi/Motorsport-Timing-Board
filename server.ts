@@ -83,17 +83,18 @@ const STATE_CACHE_FILE = path.join(process.cwd(), '.race-state-cache.json');
 function saveRaceStateCache() {
   try {
     const toSave = {
-      savedID,
-      speedhiveUrl: raceState.speedhiveUrl,
-      isManualMode: raceState.isManualMode,
-      manualRiders: raceState.manualRiders,
+      // savedID,
+      // speedhiveUrl: raceState.speedhiveUrl,
+      // isManualMode: raceState.isManualMode,
+      // manualRiders: raceState.manualRiders,
       manualSessionInfo: raceState.manualSessionInfo,
-      manualOverrides: raceState.manualOverrides,
-      lowerThird: raceState.lowerThird,
-      weather: raceState.weather,
+      // manualOverrides: raceState.manualOverrides,
+      // lowerThird: raceState.lowerThird,
+      // weather: raceState.weather,
       sessionInfo: raceState.sessionInfo,
       controlAction: raceState.controlAction,
     };
+    console.log(`[Cache] Saving race state to cache file: ${JSON.stringify(toSave, null, 2)}`);
     fs.writeFileSync(STATE_CACHE_FILE, JSON.stringify(toSave, null, 2), 'utf-8');
   } catch (e) {
     console.error('[Cache] Failed to save state to cache file:', e);
@@ -104,17 +105,17 @@ function loadRaceStateCache() {
   try {
     if (fs.existsSync(STATE_CACHE_FILE)) {
       const data = JSON.parse(fs.readFileSync(STATE_CACHE_FILE, 'utf-8'));
-      if (data.savedID) savedID = data.savedID;
-      if (data.speedhiveUrl) raceState.speedhiveUrl = data.speedhiveUrl;
-      if (typeof data.isManualMode === 'boolean') raceState.isManualMode = data.isManualMode;
-      if (Array.isArray(data.manualRiders) && data.manualRiders.length > 0) raceState.manualRiders = data.manualRiders;
+      // if (data.savedID) savedID = data.savedID;
+      // if (data.speedhiveUrl) raceState.speedhiveUrl = data.speedhiveUrl;
+      // if (typeof data.isManualMode === 'boolean') raceState.isManualMode = data.isManualMode;
+      // if (Array.isArray(data.manualRiders) && data.manualRiders.length > 0) raceState.manualRiders = data.manualRiders;
       if (data.manualSessionInfo) raceState.manualSessionInfo = data.manualSessionInfo;
-      if (data.manualOverrides) raceState.manualOverrides = data.manualOverrides;
-      if (data.lowerThird) raceState.lowerThird = data.lowerThird;
-      if (data.weather) raceState.weather = data.weather;
+      // if (data.manualOverrides) raceState.manualOverrides = data.manualOverrides;
+      // if (data.lowerThird) raceState.lowerThird = data.lowerThird;
+      // if (data.weather) raceState.weather = data.weather;
       if (data.sessionInfo) raceState.sessionInfo = data.sessionInfo;
       if (data.controlAction) raceState.controlAction = data.controlAction;
-      console.log(`[Cache] Loaded race state from cache. ManualMode=${raceState.isManualMode}, ManualRiders=${raceState.manualRiders.length}`);
+      console.log(`[Cache] Loaded race state from cache. ManualMode=${raceState.isManualMode}, ManualRiders=${raceState.manualRiders.length},raceState.manualSessionInfo=${JSON.stringify(raceState.manualSessionInfo)}`);
     }
   } catch (e) {
     console.error('[Cache] Failed to load state cache:', e);
@@ -122,7 +123,7 @@ function loadRaceStateCache() {
 }
 
 async function startServer() {
-  // loadRaceStateCache();
+  loadRaceStateCache();
   const app = express();
   const PORT = 3000;
 
@@ -361,7 +362,7 @@ async function startServer() {
         }
       }
 
-      saveRaceStateCache();
+      // saveRaceStateCache();
 
       // Broadcast update to all connected frontend screens
       broadcastToAll({
@@ -605,7 +606,7 @@ async function startServer() {
       raceState.announcement = "";
       raceState.stats = null;
       raceState.isManualMode = false;
-      saveRaceStateCache();
+      // saveRaceStateCache();
 
       // 4. Broadcast reset to all clients immediately so they purge old riders
       broadcastToAll({
@@ -654,7 +655,7 @@ async function startServer() {
                   f: freshData.f
                 };
               }
-              saveRaceStateCache();
+              // saveRaceStateCache();
               broadcastToAll({ type: "initialData", data: freshData, sessionId: targetSessionId });
               broadcastToAll({ type: "resultsForSessionReceived", data: freshData, sessionId: targetSessionId });
               broadcastToAll({ type: "sessionAddedOrUpdated", data: raceState.sessionInfo, sessionId: targetSessionId });
@@ -734,7 +735,7 @@ async function startServer() {
         sessionId: boundSessionId,
         message: "SignalR session connected successfully."
       });
-      saveRaceStateCache();
+      // saveRaceStateCache();
     } catch (err: any) {
       console.error(`[SignalR Proxy Error] Failed for session ${targetSessionId}:`, err);
       broadcastToAll({ type: "status", status: "error", message: err.message, sessionId: targetSessionId });
@@ -775,15 +776,13 @@ async function startServer() {
       isTimerRunning: raceState.isTimerRunning,
       raceSeconds: raceState.raceSeconds,
       manualOverrides: raceState.manualOverrides,
+      manualSessionInfo: raceState.manualSessionInfo,
     });
 
-    if (raceState.isManualMode || raceState.manualRiders.length > 0 || (raceState.manualOverrides && Object.keys(raceState.manualOverrides).length > 0)) {
+    if(raceState.manualSessionInfo){
       sendToClient(ws, {
-        type: "manualDataSync",
-        isManualMode: raceState.isManualMode,
-        riders: raceState.manualRiders,
+        type: "initialSessionInfo",
         sessionInfo: raceState.manualSessionInfo,
-        manualOverrides: raceState.manualOverrides,
       });
     }
 
@@ -941,7 +940,7 @@ async function startServer() {
             selectedRiderIds: Array.isArray(message.selectedRiderIds) ? message.selectedRiderIds : [],
             infoMode: message.infoMode || raceState.lowerThird?.infoMode || 'team',
           };
-          saveRaceStateCache();
+          // saveRaceStateCache();
           console.log(`[WS Server] LowerThird Control: visible=${raceState.lowerThird.visible}, pos=${raceState.lowerThird.position}, count=${raceState.lowerThird.selectedRiderIds.length}, infoMode=${raceState.lowerThird.infoMode}`);
           broadcastToAll({
             type: "lowerThirdControl",
@@ -956,7 +955,7 @@ async function startServer() {
             ...raceState.weather,
             ...(message.weather || {}),
           };
-          saveRaceStateCache();
+          // saveRaceStateCache();
           console.log(`[WS Server] Weather Control: visible=${raceState.weather.visible}, mode=${raceState.weather.mode}, region=${raceState.weather.regionName}`);
           broadcastToAll({
             type: "weatherControl",
@@ -973,6 +972,7 @@ async function startServer() {
               ...message.manualOverrides
             };
           }
+          console.log("Saving manual data sync:", raceState.isManualMode, raceState.manualRiders.length, raceState.manualSessionInfo, raceState.manualOverrides);
           saveRaceStateCache();
           console.log(`[WS Server] Manual Mode Sync: enabled=${raceState.isManualMode}, riders=${raceState.manualRiders.length}`);
           broadcastToAll({
@@ -999,7 +999,7 @@ async function startServer() {
               });
             }
           }
-          saveRaceStateCache();
+          // saveRaceStateCache();
           console.log(`[WS Server] Saved manual rider override: riderId=${message.riderId}`, message.override);
           broadcastToAll({
             type: "manualRiderOverride",
@@ -1030,7 +1030,7 @@ async function startServer() {
               raceState.manualRiders = [];
               raceState.manualSessionInfo = undefined;
               raceState.results = null;
-              saveRaceStateCache();
+              // saveRaceStateCache();
               await startOrReconnectSignalRSession(parsed.sessionId, parsed.eventId || undefined);
             }
           }
@@ -1039,7 +1039,7 @@ async function startServer() {
           console.log(`[WS Server] Received sessionControl: action=${message.action}`);
           if (message.action === 'shutdown') {
             await shutdownSignalRSessions();
-            saveRaceStateCache();
+            // saveRaceStateCache();
           } else if (message.action === 'reconnect') {
             const urlToUse = message.url || raceState.speedhiveUrl;
             let targetSessionId = savedID.sessionId || raceState.sessionId;
@@ -1053,7 +1053,7 @@ async function startServer() {
             }
             if (targetSessionId) {
               await startOrReconnectSignalRSession(targetSessionId, targetEventId);//Proxy initial data
-              saveRaceStateCache();
+              // saveRaceStateCache();
             } else {
               broadcastToAll({
                 type: 'errorMessage',

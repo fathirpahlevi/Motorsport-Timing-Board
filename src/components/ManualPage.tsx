@@ -281,6 +281,7 @@
             })
         );
         }
+        console.log("[ManualPage] Broadcasted manual data sync:", { manualActive, currentRiders, sessionInfo });
         if (addWebSocketLog) {
         addWebSocketLog('sent', `📤 Manual Data Sync sent: ${manualActive ? 'Manual ON' : 'Manual OFF'} (${currentRiders.length} racers)`);
         }

@@ -1129,16 +1129,17 @@ export default function App() {
                 }
               }
 
-              if (message.raceState.sessionInfo) {
-                const data = message.raceState.sessionInfo;
-                if (data.eNam) setRaceTitle(data.eNam);
-                if (data.rnNam) setSessionName(data.rnNam);
-                if (data.gNam) setGroupName(data.gNam);
+              if (message.raceState.sessionInfo ? message.raceState.sessionInfo : message.raceState.manualSessionInfo) {
+                const data = message.raceState.sessionInfo ? message.raceState.sessionInfo : message.raceState.manualSessionInfo;
+                console.log("Session Info Sync", data);
+                if (data.eNam || data.raceTitle) setRaceTitle(message.raceState.sessionInfo ? data.eNam : data.raceTitle);
+                if (data.rnNam || data.sessionName) setSessionName(message.raceState.sessionInfo ? data.rnNam : data.sessionName);
+                if (data.gNam || data.groupName) setGroupName(message.raceState.sessionInfo ? data.gNam : data.groupName);
                 if (data.btLpTim) setSessionBestTime(data.btLpTim);
                 // if (data.ls) setRaceLaps(data.ls);
-                if (data.ls) setLaps(data.ls);
-                if (data.lsTg) setLapsToGo(data.lsTg);
-                if (typeof data.f === "number") setFlag(data.f);
+                if (data.ls || data.laps) setLaps(message.raceState.sessionInfo ? data.ls : data.laps);
+                if (data.lsTg || data.lapsToGo) setLapsToGo(message.raceState.sessionInfo ? data.lsTg : data.lapsToGo);
+                if (typeof data.f === "number" || typeof data.flag === "number") setFlag(message.raceState.sessionInfo ? data.f : data.flag);
               }
               if (message.raceState.announcement) {
                 setLatestAnnouncement(message.raceState.announcement);
