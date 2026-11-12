@@ -409,6 +409,52 @@ async function startServer() {
     res.json({ success: true, rider: newRider });
   });
 
+  // Proxy route for Speedhive Event Results Classification data
+  app.get("/api/speedhive-eventresults-proxy", async (req, res) => {
+    try {
+      const sessionIdRaw = (req.query.sessionId as string) || '';
+      if (!sessionIdRaw.trim()) {
+        return res.status(400).json({ error: "Missing sessionId parameter" });
+      }
+
+      // Extract numeric session ID from raw input or full URL (e.g. /sessions/12880412 or 12880412h)
+      const cleanInput = sessionIdRaw.trim();
+      let cleanId = cleanInput;
+      const urlMatch = cleanInput.match(/sessions\/([0-9a-zA-Z_-]+)/i);
+      if (urlMatch) {
+        cleanId = urlMatch[1];
+      }
+      const numMatch = cleanId.match(/\d+/);
+      if (numMatch) {
+        cleanId = numMatch[0];
+      }
+
+      const apiUrl = `https://eventresults-api.speedhive.com/api/v0.2.3/eventresults/sessions/${cleanId}/classification`;
+      console.log(`[EventResults Proxy] Fetching classification from: ${apiUrl}`);
+
+      const response = await fetch(apiUrl, {
+        headers: {
+          "accept": "application/json",
+          "origin": "https://speedhive.mylaps.com",
+          "referer": "https://speedhive.mylaps.com/",
+          "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+      });
+
+      if (!response.ok) {
+        return res.status(response.status).json({
+          error: `Speedhive API returned status ${response.status}: ${response.statusText}`
+        });
+      }
+
+      const data = await response.json();
+      return res.json(data);
+    } catch (err: any) {
+      console.error("[EventResults Proxy Error]", err);
+      return res.status(500).json({ error: err.message || "Failed to fetch event results classification" });
+    }
+  });
+
   // Proxy route for Speedhive initial data to avoid CORS issues
   app.get("/api/speedhive-proxy", async (req, res) => {
     let { eventId, sessionId } = req.query;

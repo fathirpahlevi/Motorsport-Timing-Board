@@ -18,7 +18,11 @@ import {
   Tv,
   Radio,
   ClipboardPaste,
-  FolderOpen
+  FolderOpen,
+  Globe,
+  Link2,
+  Filter,
+  Layers
 } from 'lucide-react';
 import { RiderResult } from '../types';
 import { recalculateGaps } from '../data';
@@ -86,7 +90,7 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
   groupName,
   sessionName,
 }) => {
-  const [activeTab, setActiveTab] = useState<'csv' | 'images'>('csv');
+  const [activeTab, setActiveTab] = useState<'csv' | 'images' | 'resultUrl'>('csv');
 
   // CSV State
   const [csvText, setCsvText] = useState<string>('');
@@ -108,6 +112,27 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
       return false;
     }
   });
+  const [hasCachedResultUrl, setHasCachedResultUrl] = useState<boolean>(() => {
+    try {
+      return !!localStorage.getItem('speedhive_cached_result_url_import');
+    } catch {
+      return false;
+    }
+  });
+
+  // Result URL (Speedhive API) State
+  const [resultUrlInput, setResultUrlInput] = useState<string>(() => {
+    try {
+      return localStorage.getItem('speedhive_last_result_url_input') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [isFetchingResultUrl, setIsFetchingResultUrl] = useState<boolean>(false);
+  const [resultUrlError, setResultUrlError] = useState<string | null>(null);
+  const [rawClassificationData, setRawClassificationData] = useState<any | null>(null);
+  const [availableClasses, setAvailableClasses] = useState<string[]>([]);
+  const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
 
   // Image Upload State
   const [uploadedImages, setUploadedImages] = useState<UploadedImageFile[]>([]);
@@ -163,6 +188,237 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
       setTimeout(() => setPastedToast(null), 3000);
     } catch (e: any) {
       setGeminiError('Failed to load cached image extraction');
+    }
+  };
+
+  // Helper to extract numeric session ID from URL or input string
+  const extractSpeedhiveSessionId = (input: string): string => {
+    const trimmed = input.trim();
+    if (!trimmed) return '';
+    const urlMatch = trimmed.match(/sessions\/([0-9a-zA-Z_-]+)/i);
+    if (urlMatch) {
+      const matched = urlMatch[1];
+      const numMatch = matched.match(/\d+/);
+      return numMatch ? numMatch[0] : matched;
+    }
+    const numMatch = trimmed.match(/\d+/);
+    return numMatch ? numMatch[0] : trimmed;
+  };
+
+  // Format group name according to specified grammatical rules:
+  // 1 class: "CLASS 1"
+  // 2 classes: "CLASS 1 & CLASS 2"
+  // 3+ classes: "CLASS 1, CLASS 2 & CLASS 3"
+  const formatClassGroupName = (classes: string[]): string => {
+    if (!classes || classes.length === 0) return '';
+    if (classes.length === 1) return classes[0];
+    if (classes.length === 2) return `${classes[0]} & ${classes[1]}`;
+    return `${classes.slice(0, -1).join(', ')} & ${classes[classes.length - 1]}`;
+  };
+
+  // Convert Speedhive classification data to ParsedGridResult based on selected classes
+  const buildGridResultFromClassification = (
+    raw: any,
+    selectedClassList: string[],
+    currentRaceTitle?: string
+  ): ParsedGridResult => {
+    const sessionType = raw.type || 'Race';
+    const groupNameFormatted = formatClassGroupName(selectedClassList);
+    const rows: any[] = Array.isArray(raw.rows) ? raw.rows : [];
+
+    // Filter rows matching selected classes (if none specified, include all)
+    const filtered = selectedClassList.length > 0
+      ? rows.filter((r) => !r.resultClass || selectedClassList.includes(r.resultClass))
+      : rows;
+
+    // Sorting rule:
+    // If only 1 class chosen, sort by positionInClass.
+    // If multiple classes (or all), sort by overall position.
+    const isSingleClass = selectedClassList.length === 1;
+    const sorted = [...filtered].sort((a, b) => {
+      if (isSingleClass) {
+        const posClassA = typeof a.positionInClass === 'number' && a.positionInClass > 0 ? a.positionInClass : 9999;
+        const posClassB = typeof b.positionInClass === 'number' && b.positionInClass > 0 ? b.positionInClass : 9999;
+        if (posClassA !== posClassB) return posClassA - posClassB;
+      }
+      const posA = typeof a.position === 'number' && a.position > 0 ? a.position : 9999;
+      const posB = typeof b.position === 'number' && b.position > 0 ? b.position : 9999;
+      return posA - posB;
+    });
+
+    const racers: ParsedStartingRider[] = sorted.map((r, idx) => {
+      let team = '-';
+      if (r.team) {
+        team = r.team;
+      } else if (Array.isArray(r.additionalFields)) {
+        const teamField = r.additionalFields.find(
+          (f: any) =>
+            typeof f?.key === 'string' &&
+            (f.key.toLowerCase().includes('team') || f.key.toLowerCase().includes('club'))
+        );
+        if (teamField?.value) team = teamField.value;
+      }
+
+      const bestTime =
+        r.bestTime && r.bestTime !== '00.000' && r.bestTime !== '0:00.000' ? r.bestTime : undefined;
+
+      const totalTime =
+        r.totalTime && r.totalTime !== '00.000'
+          ? r.totalTime
+          : r.difference?.timeDifference && r.difference.timeDifference !== '00.000'
+          ? `+${r.difference.timeDifference}`
+          : undefined;
+
+      return {
+        pos: idx + 1,
+        no: String(r.startNumber || idx + 1).trim(),
+        nam: String(r.name || `Racer #${r.startNumber || idx + 1}`).trim(),
+        cb: team,
+        btTm: bestTime,
+        tTm: totalTime,
+      };
+    });
+
+    return {
+      raceTitle: currentRaceTitle || raceTitle || undefined,
+      groupName: groupNameFormatted,
+      sessionName: sessionType,
+      racers,
+    };
+  };
+
+  const handleFetchResultUrl = async (urlOrIdToFetch?: string) => {
+    const targetInput = urlOrIdToFetch !== undefined ? urlOrIdToFetch : resultUrlInput;
+    const sessionId = extractSpeedhiveSessionId(targetInput);
+
+    if (!sessionId) {
+      setResultUrlError('Please enter a valid Speedhive session URL or Session ID (e.g. 12880412).');
+      return;
+    }
+
+    setIsFetchingResultUrl(true);
+    setResultUrlError(null);
+
+    try {
+      localStorage.setItem('speedhive_last_result_url_input', targetInput.trim());
+
+      const res = await fetch(`/api/speedhive-eventresults-proxy?sessionId=${encodeURIComponent(sessionId)}`);
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `HTTP ${res.status}: Failed to fetch classification data`);
+      }
+
+      const data = await res.json();
+      if (!data || !Array.isArray(data.rows) || data.rows.length === 0) {
+        throw new Error('Speedhive returned no classification rows for this session.');
+      }
+
+      // Determine available classes from api response
+      let classes: string[] = [];
+      if (Array.isArray(data.classes) && data.classes.length > 0) {
+        classes = data.classes;
+      } else {
+        const extracted = Array.from(new Set(data.rows.map((r: any) => r.resultClass).filter(Boolean))) as string[];
+        classes = extracted;
+      }
+
+      setRawClassificationData(data);
+      setAvailableClasses(classes);
+      setSelectedClasses(classes);
+
+      // Preserve previous or current raceTitle
+      const preservedRaceTitle = previewResult?.raceTitle || raceTitle;
+      const parsedGrid = buildGridResultFromClassification(data, classes, preservedRaceTitle);
+      setPreviewResult(parsedGrid);
+
+      // Automatically activate manual mode upon successful fetch
+      onToggleManualMode(true);
+
+      // Cache for future recovery
+      try {
+        const cachePayload = {
+          data,
+          classes,
+          selectedClasses: classes,
+          inputUrl: targetInput.trim(),
+          parsedGrid,
+        };
+        localStorage.setItem('speedhive_cached_result_url_import', JSON.stringify(cachePayload));
+        setHasCachedResultUrl(true);
+      } catch (err) {
+        console.warn('Failed to cache Result URL data', err);
+      }
+
+      setPastedToast(`🏎️ Fetched ${data.rows.length} racers from Speedhive session ${sessionId}! Manual mode activated.`);
+      setTimeout(() => setPastedToast(null), 4000);
+    } catch (err: any) {
+      console.error('Speedhive fetch error:', err);
+      setResultUrlError(err.message || 'Error fetching classification data from Speedhive.');
+    } finally {
+      setIsFetchingResultUrl(false);
+    }
+  };
+
+  const handleToggleClass = (clsName: string) => {
+    if (!rawClassificationData) return;
+    let nextSelected: string[];
+    if (selectedClasses.includes(clsName)) {
+      if (selectedClasses.length === 1) {
+        // Switch to all classes if unchecking the sole remaining class
+        nextSelected = [...availableClasses];
+      } else {
+        nextSelected = selectedClasses.filter((c) => c !== clsName);
+      }
+    } else {
+      nextSelected = [...selectedClasses, clsName];
+    }
+    setSelectedClasses(nextSelected);
+
+    const currentCustomRaceTitle = previewResult?.raceTitle || raceTitle;
+    const updated = buildGridResultFromClassification(rawClassificationData, nextSelected, currentCustomRaceTitle);
+    setPreviewResult(updated);
+  };
+
+  const handleSelectSingleClass = (clsName: string) => {
+    if (!rawClassificationData) return;
+    const nextSelected = [clsName];
+    setSelectedClasses(nextSelected);
+    const currentCustomRaceTitle = previewResult?.raceTitle || raceTitle;
+    const updated = buildGridResultFromClassification(rawClassificationData, nextSelected, currentCustomRaceTitle);
+    setPreviewResult(updated);
+  };
+
+  const handleSelectAllClasses = () => {
+    if (!rawClassificationData) return;
+    const nextSelected = [...availableClasses];
+    setSelectedClasses(nextSelected);
+    const currentCustomRaceTitle = previewResult?.raceTitle || raceTitle;
+    const updated = buildGridResultFromClassification(rawClassificationData, nextSelected, currentCustomRaceTitle);
+    setPreviewResult(updated);
+  };
+
+  const handleLoadCachedResultUrl = () => {
+    try {
+      const raw = localStorage.getItem('speedhive_cached_result_url_import');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.data && parsed.parsedGrid) {
+          setRawClassificationData(parsed.data);
+          setAvailableClasses(parsed.classes || []);
+          setSelectedClasses(parsed.selectedClasses || parsed.classes || []);
+          if (parsed.inputUrl) setResultUrlInput(parsed.inputUrl);
+          setPreviewResult(parsed.parsedGrid);
+
+          onToggleManualMode(true);
+          setPastedToast(`📂 Loaded previous Speedhive result data (${parsed.parsedGrid.racers.length} racers)`);
+          setTimeout(() => setPastedToast(null), 3000);
+          return;
+        }
+      }
+      setPastedToast('⚠️ No previous Speedhive result data found in cache');
+      setTimeout(() => setPastedToast(null), 3000);
+    } catch (e: any) {
+      setResultUrlError('Failed to load cached Speedhive result data');
     }
   };
 
@@ -767,6 +1023,24 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
             </span>
           )}
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('resultUrl')}
+          className={`px-4 py-2 font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
+            activeTab === 'resultUrl'
+              ? 'bg-blue-600 text-white shadow-lg'
+              : 'bg-zinc-800/80 text-zinc-400 hover:text-white hover:bg-zinc-800'
+          }`}
+        >
+          <Globe className="w-4 h-4" />
+          Result URL
+          {rawClassificationData?.rows?.length ? (
+            <span className="bg-white/20 text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono">
+              {rawClassificationData.rows.length}
+            </span>
+          ) : null}
+        </button>
       </div>
 
       {/* TAB 1: CSV FILE & PASTE */}
@@ -1089,6 +1363,214 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
         </div>
       )}
 
+      {/* TAB 3: RESULT URL (SPEEDHIVE EVENT RESULTS CLASSIFICATION API) */}
+      {activeTab === 'resultUrl' && (
+        <div className="space-y-4 bg-zinc-950/60 border border-zinc-850 rounded-xl p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-black uppercase text-white font-mono flex items-center gap-2">
+                <Globe className="w-4 h-4 text-blue-400" />
+                Speedhive Event Results API Request
+              </h3>
+              <p className="text-[11px] text-zinc-400">
+                Enter Speedhive session URL (e.g. <code className="text-zinc-200">https://speedhive.mylaps.com/sessions/12880412</code>) or bare session ID to fetch official results.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleLoadCachedResultUrl}
+                disabled={!hasCachedResultUrl}
+                className="px-3 py-1.5 bg-blue-700 hover:bg-blue-600 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed text-white text-xs font-bold uppercase rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm"
+                title="Load previously fetched Speedhive result data from cache"
+              >
+                <FolderOpen className="w-3.5 h-3.5 text-white" /> Load Previous Data
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setResultUrlInput('https://speedhive.mylaps.com/sessions/12880412');
+                  handleFetchResultUrl('https://speedhive.mylaps.com/sessions/12880412');
+                }}
+                className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold uppercase rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-blue-400" /> Use Sample (12880412)
+              </button>
+            </div>
+          </div>
+
+          {/* URL / Session ID Input Form */}
+          <div className="space-y-2">
+            <label className="block text-[11px] font-black uppercase text-zinc-400 tracking-wider">
+              Speedhive Session URL or Session ID
+            </label>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <div className="relative flex-1">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
+                  <Link2 className="w-4 h-4" />
+                </div>
+                <input
+                  type="text"
+                  value={resultUrlInput}
+                  onChange={(e) => setResultUrlInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleFetchResultUrl();
+                    }
+                  }}
+                  placeholder="https://speedhive.mylaps.com/sessions/12880412 or 12880412"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-9 pr-20 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 font-mono"
+                />
+                {resultUrlInput && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResultUrlInput('');
+                      setResultUrlError(null);
+                    }}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-500 hover:text-zinc-300 text-xs font-mono cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleFetchResultUrl()}
+                disabled={isFetchingResultUrl || !resultUrlInput.trim()}
+                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-lg"
+              >
+                {isFetchingResultUrl ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Fetching API...
+                  </>
+                ) : (
+                  <>
+                    <Globe className="w-4 h-4" />
+                    Fetch Data
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {resultUrlError && (
+            <div className="p-3 bg-red-950/60 border border-red-800/80 rounded-xl flex items-center gap-2 text-red-300 text-xs font-mono">
+              <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+              <span>{resultUrlError}</span>
+            </div>
+          )}
+
+          {/* Session Overview & Class Filter Options when Data Loaded */}
+          {rawClassificationData && (
+            <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-2">
+                <div className="flex items-center gap-2 text-xs font-mono">
+                  <span className="text-zinc-400 uppercase font-bold text-[10px]">Session Type:</span>
+                  <span className="bg-blue-950/80 text-blue-300 border border-blue-800 px-2 py-0.5 rounded font-bold">
+                    {rawClassificationData.type || 'Race'}
+                  </span>
+                  <span className="text-zinc-500">•</span>
+                  <span className="text-zinc-400 uppercase font-bold text-[10px]">Total Rows:</span>
+                  <span className="text-white font-bold">{rawClassificationData.rows?.length || 0}</span>
+                </div>
+
+                <div className="text-[11px] font-mono text-zinc-400">
+                  <span className="text-emerald-400 font-bold">Manual Mode:</span> Activated
+                </div>
+              </div>
+
+              {/* Class Selection / Filter UI */}
+              {availableClasses.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="text-[11px] font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5 font-mono">
+                      <Filter className="w-3.5 h-3.5" />
+                      Class Filter & Group Name
+                    </label>
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {selectedClasses.length === 1
+                        ? 'Single class: sorted by Position In Class (P1, P2...)'
+                        : 'Multiple classes: sorted by Overall Position (P1, P2...)'}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSelectAllClasses}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all cursor-pointer font-mono flex items-center gap-1.5 ${
+                        selectedClasses.length === availableClasses.length
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                      }`}
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      All Classes ({rawClassificationData.rows?.length || 0})
+                    </button>
+
+                    {availableClasses.map((clsName) => {
+                      const isSelected = selectedClasses.includes(clsName);
+                      const classCount =
+                        rawClassificationData.rows?.filter((r: any) => r.resultClass === clsName).length || 0;
+                      return (
+                        <div key={clsName} className="inline-flex rounded-lg shadow-sm">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleClass(clsName)}
+                            className={`px-3 py-1.5 rounded-l-lg text-xs font-bold uppercase transition-all cursor-pointer font-mono flex items-center gap-1.5 ${
+                              isSelected
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-400'
+                            }`}
+                            title={`Toggle class ${clsName}`}
+                          >
+                            {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                            {clsName}
+                            <span className="bg-black/30 px-1.5 py-0.2 rounded text-[10px]">
+                              {classCount}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSelectSingleClass(clsName)}
+                            className={`px-2 py-1.5 rounded-r-lg border-l border-black/20 text-[10px] font-bold uppercase transition-all cursor-pointer font-mono ${
+                              isSelected && selectedClasses.length === 1
+                                ? 'bg-emerald-700 text-white'
+                                : 'bg-zinc-850 hover:bg-zinc-750 text-zinc-400 hover:text-white'
+                            }`}
+                            title={`Show ONLY ${clsName}`}
+                          >
+                            Only
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Visual indication of resulting Group Name */}
+                  <div className="p-2.5 bg-zinc-950 rounded-lg border border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                    <div className="flex items-center gap-2">
+                      <span className="text-zinc-500 text-[10px] uppercase font-bold">Group Name:</span>
+                      <span className="text-amber-400 font-bold">
+                        "{formatClassGroupName(selectedClasses) || 'None'}"
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-zinc-400">
+                      Displaying <span className="text-white font-bold">{previewResult?.racers.length || 0}</span> racers
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ---------------------------------------------------- */}
       {/* REVIEW & CONFIRMATION STAGING CARD                   */}
       {/* ---------------------------------------------------- */}
@@ -1123,6 +1605,57 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Quick Class Selection Bar inside staging card if multiple classes from API exist */}
+          {rawClassificationData && availableClasses.length > 0 && (
+            <div className="p-3 bg-zinc-900/90 border border-zinc-800 rounded-xl space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-xs font-mono">
+                  <Filter className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="text-zinc-300 font-bold uppercase text-[10px]">Filter Classes:</span>
+                  <span className="text-zinc-500 text-[10px]">
+                    ({selectedClasses.length === 1 ? '1 Class: Sorted by Position In Class' : 'Multiple: Sorted by Overall Position'})
+                  </span>
+                </div>
+                <span className="text-amber-400 text-xs font-mono font-bold">
+                  Group: "{previewResult.groupName || formatClassGroupName(selectedClasses)}"
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSelectAllClasses}
+                  className={`px-2.5 py-1 rounded text-xs font-bold uppercase font-mono transition-colors cursor-pointer ${
+                    selectedClasses.length === availableClasses.length
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  All Classes ({rawClassificationData.rows?.length || 0})
+                </button>
+                {availableClasses.map((clsName) => {
+                  const isSelected = selectedClasses.includes(clsName);
+                  const count = rawClassificationData.rows?.filter((r: any) => r.resultClass === clsName).length || 0;
+                  return (
+                    <button
+                      key={clsName}
+                      type="button"
+                      onClick={() => handleToggleClass(clsName)}
+                      className={`px-2.5 py-1 rounded text-xs font-bold uppercase font-mono transition-colors cursor-pointer flex items-center gap-1.5 ${
+                        isSelected
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      {isSelected && <Check className="w-3 h-3 text-white" />}
+                      {clsName} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Event Metadata Preview - Editable before applying */}
           <div className="p-3 bg-zinc-900/80 border border-zinc-800 rounded-xl space-y-2">
