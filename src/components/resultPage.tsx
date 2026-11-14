@@ -232,7 +232,7 @@ export const RaceResultPage: React.FC<RaceResultPageProps> = ({
 
                           {/* Column 4: Total Time */}
                           <td className="py-1 px-4 text-right">
-                            {true ? (
+                            {false ? (
                               <span className="font-mono text-base sm:text-lg font-extrabold text-black print:text-black">
                               {racer.totalTime}
                             </span>
