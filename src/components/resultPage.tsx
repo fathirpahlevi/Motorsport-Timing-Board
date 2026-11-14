@@ -143,7 +143,8 @@ export const RaceResultPage: React.FC<RaceResultPageProps> = ({
                   <h1 className="text-4xl numberFont mx-auto uppercase tracking-widest text-white print:text-black">Results</h1>
                   <div className="w-full p-2 bg-gradient-to-r from-zinc-100 via-zinc-100 to-zinc-100/0">
                     <h1 className="text-xl font-black italic uppercase tracking-tight text-blue-900 print:text-black">
-                      {displayEventName.length > 1 ? displayEventName : 'shell blu cru yamaha enduro challenge seri 3'}
+                      {/* {displayEventName.length > 1 ? displayEventName : 'shell blu cru yamaha enduro challenge seri 3'} */}
+                      {displayEventName}
                     </h1>
                   </div>
                 </div>
@@ -153,7 +154,8 @@ export const RaceResultPage: React.FC<RaceResultPageProps> = ({
                 <div className="flex items-center gap-2 mb-3">
                 </div>
                 <p className="text-2xl font-extrabold text-zinc-100 uppercase tracking-widest print:text-zinc-600">
-                  {displayGroupName.length > 1 ? displayGroupName : "WR155 HOBBY"} : {displaySessionName.length > 1 ? displaySessionName : "RACE"}
+                  {/* {displayGroupName.length > 1 ? displayGroupName : "WR155 HOBBY"} : {displaySessionName.length > 1 ? displaySessionName : "RACE"} */}
+                  {displayGroupName} : {displaySessionName}
                   
                 {/* DF250 TMAX - XMAX - MAXI BORE UP : RACE 1 */}
                 </p>

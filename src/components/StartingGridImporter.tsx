@@ -301,18 +301,16 @@ export const StartingGridImporter: React.FC<StartingGridImporterProps> = ({
 
     try {
       localStorage.setItem('speedhive_last_result_url_input', targetInput.trim());
-
       const res = await fetch(`/api/speedhive-eventresults-proxy?sessionId=${encodeURIComponent(sessionId)}`);
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
         throw new Error(errJson.error || `HTTP ${res.status}: Failed to fetch classification data`);
       }
-
+      
       const data = await res.json();
       if (!data || !Array.isArray(data.rows) || data.rows.length === 0) {
         throw new Error('Speedhive returned no classification rows for this session.');
       }
-
       // Determine available classes from api response
       let classes: string[] = [];
       if (Array.isArray(data.classes) && data.classes.length > 0) {

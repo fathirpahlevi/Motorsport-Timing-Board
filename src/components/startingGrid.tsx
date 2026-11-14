@@ -89,7 +89,7 @@
     // 3. SMOOTH SIDEBAR SCROLL CALCULATION
     // Height of each badge row (28px) + Gap (24px) = 52px total per row offset
     const ROW_HEIGHT_PX = 52;
-    const sidebarTranslateY = -(pageIndex * 2 * ROW_HEIGHT_PX); // Shifts 2 rows up per page
+    const sidebarTranslateY = -(pageIndex * 3 * ROW_HEIGHT_PX); // Shifts 2 rows up per page
 
     const mainLogo = new URL('../img/logoYEC.png', import.meta.url).href;
     const defaultPic = new URL('../img/racer-silhouette.png', import.meta.url).href;
