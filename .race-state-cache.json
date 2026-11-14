@@ -1,29 +1,23 @@
 {
   "manualSessionInfo": {
-    "raceTitle": "Касперский",
-    "sessionName": "OpenPit",
-    "groupName": "Заезды",
+    "raceTitle": "Motocross BOBOSHEVO",
+    "sessionName": "Practice",
+    "groupName": "MX85_MXW",
     "raceLaps": 0,
-    "laps": 13,
+    "laps": 9,
     "lapsToGo": 0,
-    "flag": 0
+    "flag": 3
   },
   "sessionInfo": {
-    "eNam": "Касперский",
-    "rnNam": "OpenPit",
-    "gNam": "Заезды",
-    "btLpTim": "2:46.415",
-    "ls": 13,
+    "eNam": "Motocross BOBOSHEVO",
+    "rnNam": "Practice",
+    "gNam": "MX85_MXW",
+    "btLpTim": "1:31.857",
+    "ls": 9,
     "lsTg": 0,
-    "f": 0,
-    "id": "SLRGNRVR-2147484485-1073747839",
-    "eId": "SLRGNRVR-2147484485",
-    "rnTp": 1,
-    "rcTm": "01:38:29.000",
-    "stod": "12-11-2026 14:00:00.000",
-    "tmTg": "00:21:30.000"
+    "f": 3
   },
   "controlAction": {
-    "position": false
+    "position": true
   }
 }

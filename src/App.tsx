@@ -172,7 +172,7 @@ export default function App() {
   }, [control]);
 
   // Display states mapped from Speedhive events
-  const [raceTitle, setRaceTitle] = useState<string>('-');
+  const [raceTitle, setRaceTitle] = useState<string>('SHELL BLU CRU YAMAHA ENDURO CHALLENGE SERI 3');
   const [sessionName, setSessionName] = useState<string>('-');
   const [groupName, setGroupName] = useState<string>('-');
   const [sessionBestTime, setSessionBestTime] = useState<string>('0:00.000');
@@ -1636,7 +1636,7 @@ export default function App() {
             <RaceResultPage
               data={resultData.current || undefined}
               riders={riders}
-              raceTitle={raceTitle}
+              raceTitle={'SHELL BLU CRU YAMAHA ENDURO CHALLENGE SERI 3'}
               groupName={groupName}
               sessionName={sessionName}
               finishedRacerPages={handleFinishedRacers}
@@ -1670,7 +1670,7 @@ export default function App() {
               <SidePositionPage
                 riders={riders}
                 sessionName={sessionName}
-                raceTitle={raceTitle}
+                raceTitle={'SHELL BLU CRU YAMAHA ENDURO CHALLENGE SERI 3'}
                 groupName={groupName}
                 showBanner={showBanner}
                 control={control}
@@ -1701,7 +1701,7 @@ export default function App() {
               racers={riders}
               activePageIndex={startingGridPage}
               pages={handleGridPages}
-              raceTitle={raceTitle}
+              raceTitle={'SHELL BLU CRU YAMAHA ENDURO CHALLENGE SERI 3'}
               groupName={groupName}
               sessionName={sessionName}
             />
