@@ -194,7 +194,7 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
           <div className="flex flex-col w-fit bg-white items-start justify-center px-12 h-full">
             <h1 className="text-2xl font-black uppercase textbiruYamaha">
               {/* {groupName.length > 1 ? groupName : "WR155 HOBBY"} */}
-              {groupName}
+              {sessionName}
             </h1>
           </div>
           {/* <div className="col-end-3 flex flex-col w-fit bg-white items-start justify-center px-12 py-2 h-full">
