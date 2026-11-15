@@ -65,7 +65,7 @@ export const TrophyPage: React.FC<RaceResultPageProps> = ({
       name: r.nam || '-',
       team: r.cb || '-',
       number: r.no || '-',
-      time:  r.btTm || '--:--.---', //|| r.gp || r.lsTm, r.btTm || r.tTm, r.btTm || r.tTm
+      time:  r.tTm || '--:--.---', //|| r.gp || r.lsTm, r.btTm || r.tTm, r.btTm || r.tTm
       isFinished: true,
     }));
   } else if (resolvedData?.racers && resolvedData.racers.length > 0) {
@@ -79,7 +79,7 @@ export const TrophyPage: React.FC<RaceResultPageProps> = ({
         name: r.riderName || '-',
         team: r.teamGroup || '-',
         number: r.riderNo || '-',
-        time: false ? r.totalTime : r.bestLapTime || '--:--.---', //r.totalTime || r.bestLapTime, r.bestLapTime || r.totalTime
+        time: true ? r.totalTime : r.bestLapTime || '--:--.---', //r.totalTime || r.bestLapTime, r.bestLapTime || r.totalTime
         isFinished: true,
       })
     );
