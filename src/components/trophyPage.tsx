@@ -208,7 +208,7 @@ export const TrophyPage: React.FC<RaceResultPageProps> = ({
       <div className='absolute flex flex-col bottom-50 text-center'>
         <h1 className='text-7xl font-racing font-bold tracking-wider text-zinc-100'>AWARDING</h1>
         <h1 className='text-7xl font-racing font-semibold text-zinc-100'>
-              {groupName}</h1>
+              {sessionName}</h1>
       </div>
     </div>
   );
