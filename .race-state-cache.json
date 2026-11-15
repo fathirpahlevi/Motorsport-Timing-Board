@@ -1,23 +1,29 @@
 {
   "manualSessionInfo": {
-    "raceTitle": "Motocross BOBOSHEVO",
-    "sessionName": "Practice",
-    "groupName": "MX85_MXW",
+    "raceTitle": "SHELL BLU CRU YAMAHA ENDURO CHALLANGE",
+    "sessionName": "YEC 3 - WR 155 COMMUNITY A",
+    "groupName": "FINAL RACE",
     "raceLaps": 0,
-    "laps": 9,
+    "laps": 5,
     "lapsToGo": 0,
-    "flag": 3
+    "flag": 0
   },
   "sessionInfo": {
-    "eNam": "Motocross BOBOSHEVO",
-    "rnNam": "Practice",
-    "gNam": "MX85_MXW",
-    "btLpTim": "1:31.857",
-    "ls": 9,
+    "eNam": "SHELL BLU CRU YAMAHA ENDURO CHALLANGE",
+    "rnNam": "YEC 3 - WR 155 COMMUNITY A",
+    "gNam": "FINAL RACE",
+    "btLpTim": "1:57.192",
+    "ls": 5,
     "lsTg": 0,
-    "f": 3
+    "f": 0,
+    "id": "UTTQNRVR-2147484298-1073746130",
+    "eId": "UTTQNRVR-2147484298",
+    "rnTp": 2,
+    "stod": "15-11-2026 10:35:00.000"
   },
   "controlAction": {
-    "position": true
+    "position": true,
+    "sidePositionPage": 1,
+    "finish": false
   }
 }

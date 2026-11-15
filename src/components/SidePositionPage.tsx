@@ -946,12 +946,12 @@ export const SidePositionPage: React.FC<SidePositionPageProps> = ({
                         <motion.div
                           layoutId={`rider-row-${rider.id}`}
                           key={rider.id}
-                          className={`w-full flex items-center flex-row border-transparent relative duration-200 ease-in-out ${showBanner ? 'translate-y-17' : ''}`}
+                          className={`w-full flex items-center flex-row border-transparent relative ${showBanner ? 'translate-y-17' : ''}`}
                           id={`rider-row-${rider.id}`}
                           initial={{ opacity: 0, x: -5  }}
                           exit={{ opacity: 0, x: -5, transition: { duration: 0.3 }  }}
                           animate={{ opacity: 1, x: 0, transition: { delay: 0.3 } }}
-                          transition={{ duration: 0, ease: 'easeInOut' }}
+                          transition={{ duration: 0.3, ease: 'easeInOut' }}
                           onClick={() => {
                             if (setSelectedRiderId) {
                               setSelectedRiderId(rider.id === selectedRiderId ? null : rider.id);
